@@ -1,3 +1,22 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+/* THIS IS THE MAGIC LINE: It forces Tailwind v4 to use the .dark class instead of your PC settings */
+@custom-variant dark (&:is(.dark *));
+
+/* Minimal base styles */
+body {
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar { 
+  width: 6px; 
+}
+::-webkit-scrollbar-track { 
+  background: transparent; 
+}
+::-webkit-scrollbar-thumb { 
+  background: #b91c1c; 
+  border-radius: 3px; 
+}
