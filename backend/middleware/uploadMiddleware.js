@@ -2,40 +2,42 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 
-// 1. Smart script to auto-create the 'uploads' folder if it is missing!
+// Smart script to auto-create the 'uploads' folder
 const uploadDir = 'uploads/';
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// 2. Configure where and how to save the file
+// Configure where and how to save the file
 const storage = multer.diskStorage({
   destination(req, file, cb) {
-    cb(null, uploadDir); // Save to the backend/uploads folder
+    cb(null, uploadDir);
   },
   filename(req, file, cb) {
-    // Rename the file to ensure no duplicate names (e.g., image-163456789.png)
     cb(null, `${file.fieldname}-${Date.now()}${path.extname(file.originalname)}`);
   }
 });
 
-// 3. Strict validation: Only accept images
+// Strict validation: Accept Images, PDFs, Word, and PowerPoint
 const checkFileType = (file, cb) => {
-  const filetypes = /jpg|jpeg|png/;
+  // Allowed extensions
+  const filetypes = /jpg|jpeg|png|pdf|doc|docx|ppt|pptx/;
+  // Allowed MIME types
+  const mimetypes = /jpeg|jpg|png|pdf|msword|vnd.openxmlformats-officedocument.wordprocessingml.document|vnd.ms-powerpoint|vnd.openxmlformats-officedocument.presentationml.presentation/;
+  
   const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
-  const mimetype = filetypes.test(file.mimetype);
+  const mimetype = mimetypes.test(file.mimetype);
 
   if (extname && mimetype) {
     return cb(null, true);
   } else {
-    cb(new Error('Only image files (JPG, JPEG, PNG) are allowed!'));
+    cb(new Error('Invalid file type. Only Images, PDFs, Word, and PowerPoint files are allowed!'));
   }
 };
 
-// 4. Initialize Multer with a 5MB size limit
 const upload = multer({
   storage,
-  limits: { fileSize: 5000000 }, // 5MB
+  limits: { fileSize: 10000000 }, // 10MB limit for documents
   fileFilter: function (req, file, cb) {
     checkFileType(file, cb);
   }

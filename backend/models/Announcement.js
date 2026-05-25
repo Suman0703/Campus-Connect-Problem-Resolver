@@ -1,29 +1,37 @@
 import mongoose from 'mongoose';
 
 const announcementSchema = new mongoose.Schema({
-  author: {
+  admin: {
     type: mongoose.Schema.Types.ObjectId,
-    required: true,
     ref: 'User',
+    required: true,
   },
   title: {
     type: String,
     required: true,
+    trim: true,
   },
   content: {
     type: String,
     required: true,
   },
-  type: {
+  priority: {
     type: String,
-    enum: ['Notice', 'Event', 'Deadline', 'General'],
-    default: 'General',
+    enum: ['Normal', 'High', 'Emergency'],
+    default: 'Normal',
   },
-  attachmentUrl: {
-    type: String, // For PDFs or images
+  attachment: {
+    type: String,
+    default: null, // Stores the file path (e.g., /uploads/announcements/file.pdf)
+  },
+  fileType: {
+    type: String, // E.g., 'image', 'pdf', 'document'
+    default: null,
+  },
+  originalFileName: {
+    type: String,
     default: null,
   }
 }, { timestamps: true });
 
-const Announcement = mongoose.model('Announcement', announcementSchema);
-export default Announcement;
+export default mongoose.model('Announcement', announcementSchema);

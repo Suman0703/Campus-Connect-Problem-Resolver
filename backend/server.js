@@ -8,8 +8,9 @@ import { fileURLToPath } from 'url';
 // Route Imports
 import authRoutes from './routes/authRoutes.js';
 import complaintRoutes from './routes/complaintRoutes.js';
-import adminRoutes from './routes/adminRoutes.js';           // <-- ADDED ADMIN ROUTES
-import superAdminRoutes from './routes/superAdminRoutes.js'; // <-- ADDED SUPER ADMIN ROUTES
+import adminRoutes from './routes/adminRoutes.js';
+import superAdminRoutes from './routes/superAdminRoutes.js';
+import announcementRoutes from './routes/announcementRoutes.js'; // NEW
 
 dotenv.config();
 connectDB();
@@ -19,20 +20,18 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Serve the 'uploads' folder statically for images
+// Serve the 'uploads' folder statically for images and docs
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// ==========================================
 // API Routes
-// ==========================================
 app.use('/api/auth', authRoutes);
 app.use('/api/complaints', complaintRoutes);
-app.use('/api/admin', adminRoutes);             // <-- CONNECTED ADMIN API
-app.use('/api/superadmin', superAdminRoutes);   // <-- CONNECTED SUPER ADMIN API
+app.use('/api/admin', adminRoutes);
+app.use('/api/superadmin', superAdminRoutes);
+app.use('/api/announcements', announcementRoutes); // NEW
 
-// Default route
 app.get('/', (req, res) => {
   res.send('Campus Connect API is running...');
 });

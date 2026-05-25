@@ -12,8 +12,7 @@ export default function StudentDashboard() {
   const [user, setUser] = useState(null);
   const [complaints, setComplaints] = useState([]);
   const [management, setManagement] = useState([]);
-
-  // NEW: State to hold the live image preview URL
+  const [announcements, setAnnouncements] = useState([]); // NEW STATE
   const [imagePreview, setImagePreview] = useState(null);
 
   const [formData, setFormData] = useState({
@@ -33,42 +32,39 @@ export default function StudentDashboard() {
     setUser(JSON.parse(storedUser));
     fetchMyComplaints(token);
     fetchManagement(token);
+    fetchAnnouncements(token); // NEW FETCH
   }, [navigate]);
 
   const fetchMyComplaints = async (token) => {
     try {
-      const response = await fetch('http://localhost:5000/api/complaints/my-complaints', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const response = await fetch('http://localhost:5000/api/complaints/my-complaints', { headers: { 'Authorization': `Bearer ${token}` } });
       if (!response.ok) throw new Error('Failed to fetch complaints');
       setComplaints(await response.json());
-    } catch (error) {
-      toast.error('Could not load your reports.');
-    } finally {
-      setIsLoading(false);
-    }
+    } catch (error) { toast.error('Could not load your reports.'); } finally { setIsLoading(false); }
   };
 
   const fetchManagement = async (token) => {
     try {
-      const response = await fetch('http://localhost:5000/api/auth/admins', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const response = await fetch('http://localhost:5000/api/auth/admins', { headers: { 'Authorization': `Bearer ${token}` } });
       if (response.ok) setManagement(await response.json());
-    } catch (error) {
-      console.error("Failed to load management directory");
-    }
+    } catch (error) { console.error("Failed to load management directory"); }
+  };
+
+  const fetchAnnouncements = async (token) => {
+    try {
+      const response = await fetch('http://localhost:5000/api/announcements', { headers: { 'Authorization': `Bearer ${token}` } });
+      if (response.ok) setAnnouncements(await response.json());
+    } catch (error) { console.error("Failed to load announcements"); }
   };
 
   const handleInputChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
 
-  // UPDATED: Now generates a live preview URL for the selected image
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
       if (file.size > 5000000) return toast.error("Image must be smaller than 5MB");
       setFormData(prev => ({ ...prev, image: file }));
-      setImagePreview(URL.createObjectURL(file)); // Creates the live preview
+      setImagePreview(URL.createObjectURL(file)); 
     }
   };
 
@@ -82,7 +78,6 @@ export default function StudentDashboard() {
     formDataToSend.append('category', formData.category);
     formDataToSend.append('location', formData.location);
     formDataToSend.append('description', formData.description);
-    
     if (formData.assignedAdmin) formDataToSend.append('assignedAdmin', formData.assignedAdmin);
     if (formData.image) formDataToSend.append('image', formData.image);
 
@@ -96,32 +91,25 @@ export default function StudentDashboard() {
       if (!response.ok) throw new Error('Failed to submit complaint');
 
       toast.success('Complaint submitted successfully!');
-      
-      // RESET FORM AND PREVIEW
       setFormData({ title: '', category: 'Hostel', location: '', description: '', assignedAdmin: '', image: null });
       setImagePreview(null);
       if (document.getElementById('imageUpload')) document.getElementById('imageUpload').value = '';
       
       setActiveTab('overview');
       fetchMyComplaints(token);
-      
-    } catch (error) {
-      toast.error(error.message);
-    } finally {
-      setIsSubmitting(false);
-    }
+    } catch (error) { toast.error(error.message); } finally { setIsSubmitting(false); }
   };
 
   const getStatusColor = (status) => {
     switch(status) {
-      case 'Resolved': return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800';
-      case 'In Progress': return 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400 border-amber-200 dark:border-amber-800';
-      case 'Pending': return 'bg-rose-100 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400 border-rose-200 dark:border-rose-800';
-      default: return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
+      case 'Resolved': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+      case 'In Progress': return 'bg-amber-100 text-amber-700 border-amber-200';
+      case 'Pending': return 'bg-rose-100 text-rose-700 border-rose-200';
+      default: return 'bg-slate-100 text-slate-700';
     }
   };
 
-  const formatDate = (dateString) => new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  const formatDate = (dateString) => new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
   if (!user) return null;
 
@@ -145,21 +133,27 @@ export default function StudentDashboard() {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-8 flex flex-col md:flex-row gap-8">
-        
         <aside className="w-full md:w-64 shrink-0">
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sticky top-24 shadow-sm">
             <nav className="flex flex-col gap-2">
-              <button onClick={() => setActiveTab('overview')} className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl font-semibold text-sm transition-all ${activeTab === 'overview' ? 'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}>
+              <button onClick={() => setActiveTab('overview')} className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl font-semibold text-sm transition-all ${activeTab === 'overview' ? 'bg-red-50 dark:bg-red-500/10 text-red-700' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}>
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
                 Dashboard Overview
               </button>
-              <button onClick={() => setActiveTab('submit')} className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl font-semibold text-sm transition-all ${activeTab === 'submit' ? 'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}>
+              <button onClick={() => setActiveTab('submit')} className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl font-semibold text-sm transition-all ${activeTab === 'submit' ? 'bg-red-50 dark:bg-red-500/10 text-red-700' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}>
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
                 Report New Issue
               </button>
-              <button onClick={() => setActiveTab('management')} className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl font-semibold text-sm transition-all ${activeTab === 'management' ? 'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}>
+              <button onClick={() => setActiveTab('management')} className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl font-semibold text-sm transition-all ${activeTab === 'management' ? 'bg-red-50 dark:bg-red-500/10 text-red-700' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}>
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                 Management Directory
+              </button>
+              <button onClick={() => setActiveTab('announcements')} className={`flex items-center justify-between w-full px-4 py-3 rounded-xl font-semibold text-sm transition-all ${activeTab === 'announcements' ? 'bg-red-50 dark:bg-red-500/10 text-red-700' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}>
+                <div className="flex items-center gap-3">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5.882V19.24M11 5.882a1.5 1.5 0 013 0v1.5a1.5 1.5 0 01-3 0m-3 6a1.5 1.5 0 00-3 0v1.5a1.5 1.5 0 003 0m-3-6a1.5 1.5 0 013 0v1.5a1.5 1.5 0 01-3 0m6 9a1.5 1.5 0 00-3 0v1.5a1.5 1.5 0 003 0m-3-6a1.5 1.5 0 013 0v1.5a1.5 1.5 0 01-3 0" /></svg>
+                  Campus Notices
+                </div>
+                {announcements.length > 0 && <span className="bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">{announcements.length}</span>}
               </button>
             </nav>
           </div>
@@ -190,7 +184,6 @@ export default function StudentDashboard() {
                       <div key={complaint._id} className="p-6 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                           <div className="flex gap-4">
-                            {/* UPDATED: Image display in the list */}
                             {complaint.image ? (
                               <img src={`http://localhost:5000${complaint.image}`} alt="Issue" className="w-16 h-16 rounded-lg object-cover border border-slate-200 dark:border-slate-700 hidden sm:block" />
                             ) : (
@@ -277,11 +270,9 @@ export default function StudentDashboard() {
                     <textarea name="description" value={formData.description} onChange={handleInputChange} required rows="4" placeholder="Please describe the exact problem..." className="w-full p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-all text-sm font-medium resize-none"></textarea>
                   </div>
 
-                  {/* UPDATED: NEW LIVE IMAGE PREVIEW UI */}
                   <div>
                     <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Photo Evidence (Optional)</label>
                     <div className="flex flex-col items-center justify-center w-full">
-                      
                       {!imagePreview ? (
                         <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-300 dark:border-slate-700 border-dashed rounded-xl cursor-pointer bg-slate-50 dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors">
                           <div className="flex flex-col items-center justify-center pt-5 pb-6">
@@ -310,7 +301,6 @@ export default function StudentDashboard() {
                           </p>
                         </div>
                       )}
-
                     </div>
                   </div>
 
@@ -351,6 +341,62 @@ export default function StudentDashboard() {
                       </div>
                       <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400 font-medium">
                         <a href={`tel:${admin.contactNumber}`} className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">{admin.contactNumber || 'Not provided'}</a>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: CAMPUS NOTICES / ANNOUNCEMENTS */}
+          {activeTab === 'announcements' && (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="mb-8">
+                <h2 className="text-3xl font-black tracking-tight mb-2">Campus Notices & Alerts</h2>
+                <p className="text-slate-500 dark:text-slate-400">Official broadcasts and documents from the administration.</p>
+              </div>
+
+              <div className="space-y-6">
+                {announcements.length === 0 ? (
+                  <div className="p-12 text-center bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                    <p className="text-slate-500 font-medium">No announcements published yet.</p>
+                  </div>
+                ) : announcements.map((notice) => (
+                  <div key={notice._id} className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col md:flex-row">
+                    
+                    <div className={`p-4 flex flex-col items-center justify-center shrink-0 w-full md:w-32 ${notice.priority === 'Emergency' ? 'bg-rose-500 text-white' : notice.priority === 'High' ? 'bg-amber-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>
+                      {notice.priority === 'Emergency' && <svg className="w-8 h-8 mb-2 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>}
+                      <span className="text-xs font-black uppercase tracking-wider">{notice.priority}</span>
+                      <span className="text-[10px] mt-2 text-center opacity-80">{formatDate(notice.createdAt)}</span>
+                    </div>
+
+                    <div className="p-6 md:p-8 w-full">
+                      <div className="flex justify-between items-start mb-4">
+                        <h3 className="text-2xl font-black text-slate-900 dark:text-white leading-tight">{notice.title}</h3>
+                      </div>
+                      <p className="text-slate-600 dark:text-slate-300 mb-6 whitespace-pre-wrap leading-relaxed">{notice.content}</p>
+                      
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300">
+                            {notice.admin?.firstName?.charAt(0) || 'A'}
+                          </div>
+                          <span className="text-xs font-semibold text-slate-500">Posted by {notice.admin?.firstName} {notice.admin?.lastName}</span>
+                        </div>
+                        
+                        {notice.attachment && (
+                          notice.fileType === 'image' ? (
+                            <a href={`http://localhost:5000${notice.attachment}`} target="_blank" rel="noreferrer" className="block max-w-sm mt-4 sm:mt-0">
+                              <img src={`http://localhost:5000${notice.attachment}`} alt="Attachment" className="w-full h-auto rounded-xl border-2 border-slate-200 dark:border-slate-700 shadow-md hover:opacity-90 transition-opacity" />
+                            </a>
+                          ) : (
+                            <a href={`http://localhost:5000${notice.attachment}`} download={notice.originalFileName} target="_blank" rel="noreferrer" className="flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors font-bold text-sm">
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                              Download {notice.fileType.toUpperCase()}
+                            </a>
+                          )
+                        )}
                       </div>
                     </div>
                   </div>
