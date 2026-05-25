@@ -19,14 +19,9 @@ export default function HomePage() {
 
   // Handle Logout Function
   const handleLogout = () => {
-    // Clear local storage
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    
-    // Clear state
     setUser(null);
-    
-    // Show notification and redirect
     toast.success('Logged out successfully.');
     navigate('/');
   };
@@ -58,9 +53,24 @@ export default function HomePage() {
             <Link to="/" className="text-[15px] font-semibold text-slate-900 dark:text-white">
               Home
             </Link>
-            <Link to="/tracker" className="text-[15px] font-medium text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition">
-              Issue Tracker
-            </Link>
+            
+            {/* STRICT ROLE-BASED LINKS */}
+            {user && user.role === 'student' && (
+              <Link to="/dashboard" className="text-[15px] font-bold text-[#991b1b] dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 transition">
+                My Dashboard
+              </Link>
+            )}
+            {user && user.role === 'admin' && (
+              <Link to="/admin-dashboard" className="text-[15px] font-bold text-[#991b1b] dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 transition">
+                Admin Portal
+              </Link>
+            )}
+            {user && user.role === 'superadmin' && (
+              <Link to="/super-admin-dashboard" className="text-[15px] font-bold text-[#991b1b] dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 transition">
+                Super Admin Portal
+              </Link>
+            )}
+
             <Link to="/announcements" className="text-[15px] font-medium text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition">
               Announcements
             </Link>
@@ -71,7 +81,7 @@ export default function HomePage() {
             <ThemeToggle />
             
             {user ? (
-              // --- WHAT TO SHOW IF LOGGED IN ---
+              // --- LOGGED IN VIEW ---
               <div className="flex items-center gap-4 pl-4 ml-2 border-l border-slate-200 dark:border-slate-800">
                 <div className="hidden sm:flex flex-col items-end">
                   <span className="text-sm font-bold text-slate-900 dark:text-white leading-tight">
@@ -81,8 +91,7 @@ export default function HomePage() {
                     {user.role}
                   </span>
                 </div>
-                {/* Dynamic Initial Avatar */}
-                <div className="w-10 h-10 rounded-full bg-red-700 text-white flex items-center justify-center font-bold shadow-sm">
+                <div className="w-10 h-10 rounded-full bg-red-700 text-white flex items-center justify-center font-bold shadow-sm uppercase">
                   {user.firstName.charAt(0)}{user.lastName.charAt(0)}
                 </div>
                 
@@ -94,7 +103,7 @@ export default function HomePage() {
                 </button>
               </div>
             ) : (
-              // --- WHAT TO SHOW IF LOGGED OUT ---
+              // --- LOGGED OUT VIEW ---
               <>
                 <Link to="/login" className="hidden sm:block text-[15px] font-semibold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition">
                   Login
@@ -136,21 +145,20 @@ export default function HomePage() {
               and real-time updates.
             </p>
 
-            {/* Dynamic Buttons based on Auth State */}
+            {/* Dynamic Buttons based on Auth State & Role */}
             <div className="flex flex-wrap gap-5">
               {user ? (
-                <Link to="/tracker" className="px-8 py-4 rounded-xl bg-[#0f172a] dark:bg-red-700 hover:bg-black dark:hover:bg-red-800 text-white font-semibold transition-all duration-300 shadow-md hover:shadow-xl hover:-translate-y-1">
-                  Go to Dashboard
+                <Link 
+                  to={user.role === 'superadmin' ? '/super-admin-dashboard' : user.role === 'admin' ? '/admin-dashboard' : '/dashboard'} 
+                  className="px-8 py-4 rounded-xl bg-[#0f172a] dark:bg-red-700 hover:bg-black dark:hover:bg-red-800 text-white font-semibold transition-all duration-300 shadow-md hover:shadow-xl hover:-translate-y-1"
+                >
+                  Go to {user.role === 'student' ? 'Dashboard' : 'Portal'}
                 </Link>
               ) : (
                 <Link to="/login" className="px-8 py-4 rounded-xl bg-[#0f172a] dark:bg-red-700 hover:bg-black dark:hover:bg-red-800 text-white font-semibold transition-all duration-300 shadow-md hover:shadow-xl hover:-translate-y-1">
                   Report Issue
                 </Link>
               )}
-              
-              <Link to="/tracker" className="px-8 py-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-400 dark:hover:border-slate-500 text-slate-700 dark:text-white font-semibold transition-all duration-300">
-                View Tracker
-              </Link>
             </div>
           </div>
 
@@ -224,7 +232,7 @@ export default function HomePage() {
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-[#0f172a] dark:text-white">Live Tracking</h3>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">Real-time issue updates</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Real-time updates</p>
                 </div>
               </div>
               <p className="text-slate-600 dark:text-slate-400 leading-7 text-[15px]">

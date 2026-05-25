@@ -2,35 +2,42 @@ import User from '../models/User.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
-// Generate JWT Token
 const generateToken = (id, role) => {
   return jwt.sign({ id, role }, process.env.JWT_SECRET, { expiresIn: '30d' });
 };
 
 // @desc    Register a new user
-// @route   POST /api/auth/register
 export const registerUser = async (req, res) => {
   try {
-    const { firstName, lastName, email, identifier, password, role } = req.body;
+    const { firstName, lastName, email, identifier, password, role, stream, branch, semester, contactNumber } = req.body;
 
-    // Check if user already exists
+    if (role === 'superadmin') {
+      return res.status(403).json({ message: 'Unauthorized: Cannot register as a Super Admin.' });
+    }
+
+    const finalRole = (role === 'admin') ? 'admin' : 'student';
     const userExists = await User.findOne({ $or: [{ email }, { identifier }] });
+    
     if (userExists) {
       return res.status(400).json({ message: 'User with this email or identifier already exists' });
     }
 
-    // Hash password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Create user
+    // Create user and save fields ONLY if the user is an admin
     const user = await User.create({
       firstName,
       lastName,
       email,
       identifier,
       password: hashedPassword,
-      role: role || 'student', // Default to student if not provided
+      role: finalRole, 
+      stream: finalRole === 'admin' ? stream : '',
+      branch: finalRole === 'admin' ? branch : '',
+      semester: finalRole === 'admin' ? semester : '',
+      contactNumber: finalRole === 'admin' ? contactNumber : '',
+      isApproved: finalRole === 'student'
     });
 
     if (user) {
@@ -41,7 +48,7 @@ export const registerUser = async (req, res) => {
         email: user.email,
         role: user.role,
         isApproved: user.isApproved,
-        token: generateToken(user._id, user.role),
+        token: user.isApproved ? generateToken(user._id, user.role) : null,
       });
     }
   } catch (error) {
@@ -50,31 +57,32 @@ export const registerUser = async (req, res) => {
 };
 
 // @desc    Authenticate user & get token
-// @route   POST /api/auth/login
 export const loginUser = async (req, res) => {
   try {
     const { identifier, password, role } = req.body;
 
-    // Search for the user by EITHER Email OR Roll/Reg Number
     const user = await User.findOne({
       $or: [
         { email: identifier.toLowerCase().trim() },
         { identifier: identifier.trim() }
-      ],
-      role: role // Ensures a student can't log in via the Admin tab
+      ]
     });
 
-    // If no user is found with that email/roll OR if they picked the wrong role tab
     if (!user) {
-      return res.status(401).json({ message: 'Invalid credentials or role mismatch. Ensure you selected the correct Student/Admin tab.' });
+      return res.status(401).json({ message: 'Invalid credentials. User not found.' });
     }
 
-    // Check if an admin is approved
+    if (role === 'student' && user.role !== 'student') {
+      return res.status(401).json({ message: 'Role mismatch: Please use the Administrator tab to log in.' });
+    }
+    if (role === 'admin' && (user.role !== 'admin' && user.role !== 'superadmin')) {
+      return res.status(401).json({ message: 'Role mismatch: Please use the Student tab to log in.' });
+    }
+
     if (user.role === 'admin' && !user.isApproved) {
       return res.status(403).json({ message: 'Admin account pending approval from Super Admin.' });
     }
 
-    // Verify Password
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (user && isMatch) {
@@ -84,7 +92,7 @@ export const loginUser = async (req, res) => {
         lastName: user.lastName,
         email: user.email,
         identifier: user.identifier,
-        role: user.role,
+        role: user.role, 
         token: generateToken(user._id, user.role),
       });
     } else {
@@ -92,5 +100,16 @@ export const loginUser = async (req, res) => {
     }
   } catch (error) {
     res.status(500).json({ message: 'Server error during login', error: error.message });
+  }
+};
+
+// @desc    Fetch Approved Admins for Students
+export const getApprovedAdmins = async (req, res) => {
+  try {
+    const admins = await User.find({ role: 'admin', isApproved: true })
+      .select('firstName lastName email stream branch semester contactNumber');
+    res.json(admins);
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to fetch management directory' });
   }
 };

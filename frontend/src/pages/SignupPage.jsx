@@ -13,7 +13,12 @@ export default function SignupPage() {
     lastName: '',
     email: '',
     identifier: '',
-    password: ''
+    password: '',
+    role: 'student',
+    stream: '',
+    branch: '',
+    semester: '',
+    contactNumber: ''
   });
 
   const handleChange = (e) => {
@@ -30,10 +35,17 @@ export default function SignupPage() {
       return toast.error('Please provide a valid university email address.');
     }
     if (!formData.identifier.trim()) {
-      return toast.error('Roll Number / Register Number is required.');
+      return toast.error(`${formData.role === 'student' ? 'Roll Number' : 'Employee ID'} is required.`);
     }
     if (formData.password.length < 8) {
       return toast.error('Password must be at least 8 characters long.');
+    }
+    
+    // Strict validation ONLY for Admins
+    if (formData.role === 'admin') {
+      if (!formData.stream.trim() || !formData.branch.trim() || !formData.semester.trim() || !formData.contactNumber.trim()) {
+        return toast.error('Admins must provide Stream, Branch, Semester, and Contact Number.');
+      }
     }
 
     setLoading(true);
@@ -51,11 +63,17 @@ export default function SignupPage() {
         throw new Error(data.message || 'Registration failed.');
       }
 
-      toast.success('Account created successfully! Please sign in.');
-      navigate('/login');
+      if (data.role === 'admin') {
+        toast.success('Account created! Admin access is pending Super Admin approval.', { duration: 6000, icon: '🛡️' });
+        navigate('/login');
+      } else {
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data));
+        toast.success('Account created successfully! Welcome in.');
+        navigate('/');
+      }
       
     } catch (err) {
-      // Smart Error Handling for dead backend
       if (err.message === 'Failed to fetch') {
         toast.error('Cannot connect to server. Is your backend running?');
       } else {
@@ -77,13 +95,8 @@ export default function SignupPage() {
         
         {/* LEFT SIDE (BRANDING) */}
         <div className="hidden md:flex w-5/12 relative bg-slate-900 items-center justify-center overflow-hidden border-r border-slate-200 dark:border-slate-800">
-          
-          {/* Image opacity increased to 80 for clear visibility */}
           <img src="https://images.unsplash.com/photo-1523240795612-9a054b0db644?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80" alt="Students on Campus" className="absolute inset-0 w-full h-full object-cover opacity-80"/>
-          
-          {/* Gradient overlay adjusted to ensure text remains readable */}
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/60 to-transparent"></div>
-          
           <div className="absolute top-1/4 -left-20 w-64 h-64 bg-red-600 rounded-full mix-blend-multiply filter blur-[80px] opacity-40 animate-pulse"></div>
 
           <div className="relative z-10 flex flex-col h-full justify-between p-12 w-full">
@@ -109,6 +122,32 @@ export default function SignupPage() {
               <p className="text-slate-500 dark:text-slate-400 font-medium text-sm">Enter your student or admin details to get started.</p>
             </div>
 
+            {/* Role Selection Tabs */}
+            <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-xl mb-6">
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, role: 'student' })}
+                className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all duration-200 ${
+                  formData.role === 'student'
+                    ? 'bg-white dark:bg-slate-950 shadow-sm text-slate-900 dark:text-white'
+                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                }`}
+              >
+                Student
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, role: 'admin' })}
+                className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all duration-200 ${
+                  formData.role === 'admin'
+                    ? 'bg-white dark:bg-slate-950 shadow-sm text-slate-900 dark:text-white'
+                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                }`}
+              >
+                Administrator
+              </button>
+            </div>
+
             <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="flex-1">
@@ -127,9 +166,38 @@ export default function SignupPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">Roll / Register Number</label>
-                <input type="text" name="identifier" value={formData.identifier} onChange={handleChange} placeholder="e.g. 2305609" className="w-full p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-all font-medium text-sm" />
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
+                  {formData.role === 'student' ? 'Roll / Register Number' : 'Employee ID'}
+                </label>
+                <input type="text" name="identifier" value={formData.identifier} onChange={handleChange} placeholder={formData.role === 'student' ? 'e.g. 2305609' : 'e.g. EMP123'} className="w-full p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-all font-medium text-sm" />
               </div>
+
+              {/* STRICT ADMIN-ONLY FIELDS */}
+              {formData.role === 'admin' && (
+                <div className="space-y-4 p-5 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-2xl border border-indigo-100 dark:border-indigo-900/30 animate-in fade-in zoom-in duration-300">
+                  <h4 className="text-sm font-bold text-indigo-700 dark:text-indigo-400 border-b border-indigo-100 dark:border-indigo-800/50 pb-2">Admin Assignment Details</h4>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Stream</label>
+                      <input type="text" name="stream" value={formData.stream} onChange={handleChange} placeholder="B.Tech" className="w-full p-3 rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:ring-1 focus:ring-indigo-500 transition-all font-medium text-sm text-white" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Branch</label>
+                      <input type="text" name="branch" value={formData.branch} onChange={handleChange} placeholder="CSE" className="w-full p-3 rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:ring-1 focus:ring-indigo-500 transition-all font-medium text-sm text-white" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Semester</label>
+                      <input type="text" name="semester" value={formData.semester} onChange={handleChange} placeholder="6" className="w-full p-3 rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:ring-1 focus:ring-indigo-500 transition-all font-medium text-sm  text-white" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Contact Number</label>
+                    <input type="tel" name="contactNumber" value={formData.contactNumber} onChange={handleChange} placeholder="+91 98765 43210" className="w-full p-3 rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:ring-1 focus:ring-indigo-500 transition-all font-medium text-sm  text-white" />
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">Password</label>
@@ -143,7 +211,6 @@ export default function SignupPage() {
                     placeholder="••••••••" 
                     className="w-full p-3.5 pr-12 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-all font-medium text-sm" 
                   />
-                  {/* Show/Hide Button */}
                   <button 
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
