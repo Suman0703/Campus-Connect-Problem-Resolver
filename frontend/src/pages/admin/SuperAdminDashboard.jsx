@@ -5,11 +5,13 @@ import ThemeToggle from '../../components/common/ThemeToggle';
 
 export default function SuperAdminDashboard() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('overview');
-
+  // We now have 4 distinct tabs
+  const [activeTab, setActiveTab] = useState('overview'); 
+  
   const [user, setUser] = useState(null);
   const [stats, setStats] = useState(null);
   const [pendingAdmins, setPendingAdmins] = useState([]);
+  const [activeAdmins, setActiveAdmins] = useState([]); // State for the Personnel List
   const [announcements, setAnnouncements] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -36,25 +38,19 @@ export default function SuperAdminDashboard() {
   const fetchDashboardData = async (token) => {
     setIsLoading(true);
     try {
-      const [statsRes, adminsRes, annRes] = await Promise.all([
-        fetch(`${import.meta.env.VITE_API_URL}/api/superadmin/stats`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }),
-
-        fetch(`${import.meta.env.VITE_API_URL}/api/superadmin/pending-admins`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }),
-
-        fetch(`${import.meta.env.VITE_API_URL}/api/announcements`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
+      const [statsRes, adminsRes, annRes, activeAdminsRes] = await Promise.all([
+        fetch(`${import.meta.env.VITE_API_URL}/api/superadmin/stats`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${import.meta.env.VITE_API_URL}/api/superadmin/pending-admins`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${import.meta.env.VITE_API_URL}/api/announcements`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${import.meta.env.VITE_API_URL}/api/superadmin/admins`, { headers: { 'Authorization': `Bearer ${token}` } }) // Fetches all approved admins
       ]);
 
-      if (!statsRes.ok || !adminsRes.ok || !annRes.ok) throw new Error('Failed to fetch data');
-
+      if (!statsRes.ok || !adminsRes.ok || !annRes.ok || !activeAdminsRes.ok) throw new Error('Failed to fetch data');
+      
       setStats(await statsRes.json());
       setPendingAdmins(await adminsRes.json());
       setAnnouncements(await annRes.json());
+      setActiveAdmins(await activeAdminsRes.json());
     } catch (error) {
       toast.error('Could not load system data.');
     } finally {
@@ -64,7 +60,7 @@ export default function SuperAdminDashboard() {
 
   const handleAdminAction = async (id, action) => {
     const token = localStorage.getItem('token');
-    const endpoint = action === 'approve'
+    const endpoint = action === 'approve' 
       ? `${import.meta.env.VITE_API_URL}/api/superadmin/approve-admin/${id}`
       : `${import.meta.env.VITE_API_URL}/api/superadmin/reject-admin/${id}`;
     const method = action === 'approve' ? 'PUT' : 'DELETE';
@@ -75,10 +71,27 @@ export default function SuperAdminDashboard() {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) throw new Error(`Failed to ${action} admin`);
-
+      
       toast.success(`Admin successfully ${action}d!`);
-      setPendingAdmins(pendingAdmins.filter(admin => admin._id !== id));
-      fetchDashboardData(token);
+      fetchDashboardData(token); // Refresh lists automatically
+    } catch (error) {
+      toast.error(error.message);
+    }
+  };
+
+  const handleRevokeAdmin = async (id) => {
+    if (!window.confirm('CRITICAL ACTION: Are you absolutely sure you want to permanently delete this Administrator account?')) return;
+    
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/superadmin/admins/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error('Failed to revoke access');
+      
+      toast.success('Administrator access permanently revoked.');
+      fetchDashboardData(token); // Refresh lists automatically
     } catch (error) {
       toast.error(error.message);
     }
@@ -86,7 +99,7 @@ export default function SuperAdminDashboard() {
 
   const handleDeleteAnnouncement = async (id) => {
     if (!window.confirm('Are you sure you want to delete this directive?')) return;
-
+    
     const token = localStorage.getItem('token');
     try {
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/announcements/${id}`, {
@@ -94,7 +107,7 @@ export default function SuperAdminDashboard() {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to delete directive');
-
+      
       toast.success('Directive deleted successfully!');
       setAnnouncements(announcements.filter(a => a._id !== id));
     } catch (error) {
@@ -112,7 +125,7 @@ export default function SuperAdminDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white transition-colors duration-300">
-
+      
       <header className="sticky top-0 z-50 w-full border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto h-16 px-6 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
@@ -130,17 +143,15 @@ export default function SuperAdminDashboard() {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-8 flex flex-col md:flex-row gap-8">
-
+        
         <aside className="w-full md:w-64 shrink-0">
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sticky top-24 shadow-sm">
             <nav className="flex flex-col gap-2">
-              {/* 1. Global Overview */}
               <button onClick={() => setActiveTab('overview')} className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl font-semibold text-sm transition-all ${activeTab === 'overview' ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400' : 'text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50'}`}>
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
                 Global Overview
               </button>
-
-              {/* 2. Admin Approvals */}
+              
               <button onClick={() => setActiveTab('approvals')} className={`flex items-center justify-between w-full px-4 py-3 rounded-xl font-semibold text-sm transition-all ${activeTab === 'approvals' ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400' : 'text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50'}`}>
                 <div className="flex items-center gap-3">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
@@ -149,13 +160,12 @@ export default function SuperAdminDashboard() {
                 {pendingAdmins.length > 0 && <span className="bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">{pendingAdmins.length}</span>}
               </button>
 
-              {/* 3. MANAGE PERSONNEL (THIS IS THE TAB YOU WERE MISSING) */}
+              {/* THIS IS THE MANAGE PERSONNEL TAB */}
               <button onClick={() => setActiveTab('manage-admins')} className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl font-semibold text-sm transition-all ${activeTab === 'manage-admins' ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400' : 'text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50'}`}>
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                 Manage Personnel
               </button>
 
-              {/* 4. Post Directive */}
               <button onClick={() => setActiveTab('announcements')} className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl font-semibold text-sm transition-all ${activeTab === 'announcements' ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400' : 'text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50'}`}>
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5.882V19.24M11 5.882a1.5 1.5 0 013 0v1.5a1.5 1.5 0 01-3 0m-3 6a1.5 1.5 0 00-3 0v1.5a1.5 1.5 0 003 0m-3-6a1.5 1.5 0 013 0v1.5a1.5 1.5 0 01-3 0m6 9a1.5 1.5 0 00-3 0v1.5a1.5 1.5 0 003 0m-3-6a1.5 1.5 0 013 0v1.5a1.5 1.5 0 01-3 0" /></svg>
                 Post Directive
@@ -225,7 +235,7 @@ export default function SuperAdminDashboard() {
                           <div>
                             <h4 className="text-lg font-bold">{admin.firstName} {admin.lastName}</h4>
                             <div className="flex flex-col text-sm text-slate-500 gap-1 mt-1">
-                              <span><strong className="text-slate-600">Assigned To: </strong> <span className="text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded">{admin.stream} {admin.branch} • Sem {admin.semester}</span></span>
+                              <span><strong className="text-slate-600">Requested Branch: </strong> <span className="text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded">{admin.stream} {admin.branch} • Sem {admin.semester}</span></span>
                             </div>
                           </div>
                         </div>
@@ -241,10 +251,68 @@ export default function SuperAdminDashboard() {
             </div>
           )}
 
-          {/* TAB 3: POST DIRECTIVE & MANAGEMENT */}
+          {/* TAB 3: MANAGE PERSONNEL LIST */}
+          {activeTab === 'manage-admins' && (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="mb-8">
+                <h2 className="text-3xl font-black tracking-tight mb-2">Personnel Management</h2>
+                <p className="text-slate-500 dark:text-slate-400">View and manage all active administrators on the platform.</p>
+              </div>
+
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                {isLoading ? (
+                  <div className="p-12 text-center text-slate-500">Loading active personnel...</div>
+                ) : activeAdmins.length === 0 ? (
+                  <div className="p-16 text-center text-slate-500">There are no approved administrators currently in the system.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800 text-xs uppercase text-slate-500">
+                        <tr>
+                          <th className="px-6 py-4 font-bold">Administrator</th>
+                          <th className="px-6 py-4 font-bold">Assigned Department</th>
+                          <th className="px-6 py-4 font-bold">Contact Details</th>
+                          <th className="px-6 py-4 font-bold text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                        {activeAdmins.map((admin) => (
+                          <tr key={admin._id} className="hover:bg-slate-50 dark:hover:bg-slate-800/20">
+                            <td className="px-6 py-4">
+                              <div className="font-bold text-slate-900 dark:text-white">{admin.firstName} {admin.lastName}</div>
+                              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">ID: {admin.identifier}</div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 rounded-md text-xs font-bold">
+                                {admin.stream} {admin.branch}
+                              </span>
+                              <div className="text-xs text-slate-500 mt-1.5 font-medium">Semester {admin.semester}</div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="text-xs font-medium text-slate-600 dark:text-slate-300">{admin.email}</div>
+                              <div className="text-xs font-medium text-slate-500 mt-1">{admin.contactNumber}</div>
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <button 
+                                onClick={() => handleRevokeAdmin(admin._id)} 
+                                className="px-3 py-1.5 bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 rounded-lg text-xs font-bold transition-colors"
+                              >
+                                Revoke Access
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {activeTab === 'announcements' && (
             <div className="animate-in fade-in duration-500 max-w-4xl space-y-12">
-
+              
               <div>
                 <div className="mb-6">
                   <h2 className="text-3xl font-black tracking-tight mb-2">Broadcast Directive</h2>
@@ -264,10 +332,10 @@ export default function SuperAdminDashboard() {
                         body: form
                       });
                       if (!res.ok) throw new Error('Failed to post directive');
-
+                      
                       const newDirective = await res.json();
                       setAnnouncements([newDirective, ...announcements]);
-
+                      
                       toast.success('Directive broadcasted successfully!');
                       e.target.reset();
                       document.getElementById('file-name-display').textContent = '';
@@ -293,9 +361,9 @@ export default function SuperAdminDashboard() {
                     </div>
                     <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 border-dashed text-center">
                       <input type="file" name="attachment" id="attachment" className="hidden" onChange={(e) => {
-                        const name = e.target.files[0]?.name || '';
-                        document.getElementById('file-name-display').textContent = name ? `Attached: ${name}` : '';
-                      }} />
+                          const name = e.target.files[0]?.name || '';
+                          document.getElementById('file-name-display').textContent = name ? `Attached: ${name}` : '';
+                        }} />
                       <label htmlFor="attachment" className="cursor-pointer inline-flex items-center gap-2 px-6 py-3 bg-white border border-slate-300 rounded-full font-bold text-sm text-slate-700 hover:shadow-md transition-all dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
                         Attach Document
@@ -309,7 +377,6 @@ export default function SuperAdminDashboard() {
                 </div>
               </div>
 
-              {/* Directive History / Management List */}
               <div>
                 <h3 className="text-2xl font-black mb-4">Your Broadcast History</h3>
                 {myAnnouncements.length === 0 ? (
