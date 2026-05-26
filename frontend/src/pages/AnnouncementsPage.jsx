@@ -28,7 +28,9 @@ export default function AnnouncementsPage() {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to fetch announcements');
-      setAnnouncements(await response.json());
+      
+      const data = await response.json();
+      setAnnouncements(data);
     } catch (error) {
       toast.error('Could not load announcements.');
     } finally {
@@ -36,7 +38,6 @@ export default function AnnouncementsPage() {
     }
   };
 
-  // NEW: Delete functionality
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this announcement? The attached file will also be permanently removed.')) return;
     
@@ -50,7 +51,6 @@ export default function AnnouncementsPage() {
       if (!response.ok) throw new Error('Failed to delete announcement');
       
       toast.success('Announcement deleted successfully!');
-      // Instantly remove it from the screen
       setAnnouncements(announcements.filter(notice => notice._id !== id));
     } catch (error) {
       toast.error(error.message);
@@ -124,7 +124,6 @@ export default function AnnouncementsPage() {
                   <div className="flex justify-between items-start mb-4 gap-4">
                     <h3 className="text-2xl font-black text-slate-900 dark:text-white leading-tight">{notice.title}</h3>
                     
-                    {/* NEW: Conditional Delete Button */}
                     {(user.role === 'superadmin' || user._id === notice.admin?._id) && (
                       <button 
                         onClick={() => handleDelete(notice._id)} 

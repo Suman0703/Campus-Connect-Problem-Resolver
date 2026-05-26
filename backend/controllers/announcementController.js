@@ -28,6 +28,7 @@ export const createAnnouncement = async (req, res) => {
 
     const targetAudience = req.user.role === 'superadmin' ? 'admin' : 'student';
 
+    // Creates a brand new document every time
     const announcement = new Announcement({
       admin: req.user._id,
       title,
@@ -40,7 +41,12 @@ export const createAnnouncement = async (req, res) => {
     });
 
     const createdAnnouncement = await announcement.save();
-    res.status(201).json(createdAnnouncement);
+    
+    // Populate admin details before sending back so UI updates immediately
+    const populatedAnnouncement = await Announcement.findById(createdAnnouncement._id)
+      .populate('admin', 'firstName lastName stream branch role');
+      
+    res.status(201).json(populatedAnnouncement);
   } catch (error) {
     res.status(500).json({ message: 'Failed to create announcement', error: error.message });
   }
@@ -54,17 +60,13 @@ export const getAnnouncements = async (req, res) => {
     if (req.user.role === 'student') {
       filter.targetAudience = 'student';
     } else if (req.user.role === 'admin') {
-      // CRITICAL FIX: Admins see updates targeted to them OR updates they authored
-      filter.$or = [
-        { targetAudience: 'admin' },
-        { admin: req.user._id }
-      ];
+      // Admins see Super Admin posts OR their own posts
+      filter.$or = [{ targetAudience: 'admin' }, { admin: req.user._id }];
     }
-    // SuperAdmin sees everything by default
 
     const announcements = await Announcement.find(filter)
       .populate('admin', 'firstName lastName stream branch role')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 }); // Newest first
       
     res.json(announcements);
   } catch (error) {
@@ -83,16 +85,16 @@ export const deleteAnnouncement = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized to delete this announcement' });
     }
 
-    // Delete the physical file from the server
+    // Free up server storage
     if (announcement.attachment) {
-      const filePath = path.join(__dirname, '..', announcement.attachment);
+      const filePath = path.join(__dirname, '..', '..', announcement.attachment);
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
       }
     }
 
     await announcement.deleteOne();
-    res.json({ message: 'Announcement and associated files deleted successfully' });
+    res.json({ message: 'Announcement deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: 'Failed to delete announcement', error: error.message });
   }

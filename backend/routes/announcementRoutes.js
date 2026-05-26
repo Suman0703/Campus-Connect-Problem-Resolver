@@ -7,8 +7,6 @@ const router = express.Router();
 
 router.get('/', protect, getAnnouncements);
 router.post('/', protect, isAdmin, upload.single('attachment'), createAnnouncement);
-
-// NEW: Delete Route
 router.delete('/:id', protect, isAdmin, deleteAnnouncement);
 
 export default router;

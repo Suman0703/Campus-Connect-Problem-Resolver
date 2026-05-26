@@ -10,7 +10,7 @@ export default function AdminDashboard() {
   const [user, setUser] = useState(null);
   const [complaints, setComplaints] = useState([]);
   const [assignedComplaints, setAssignedComplaints] = useState([]);
-  const [announcements, setAnnouncements] = useState([]); // NEW
+  const [announcements, setAnnouncements] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -39,7 +39,7 @@ export default function AdminDashboard() {
       const [allRes, assignedRes, annRes] = await Promise.all([
         fetch('http://localhost:5000/api/admin/complaints', { headers: { 'Authorization': `Bearer ${token}` } }),
         fetch('http://localhost:5000/api/admin/complaints/assigned', { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch('http://localhost:5000/api/announcements', { headers: { 'Authorization': `Bearer ${token}` } }) // NEW
+        fetch('http://localhost:5000/api/announcements', { headers: { 'Authorization': `Bearer ${token}` } })
       ]);
 
       if (!allRes.ok || !assignedRes.ok || !annRes.ok) throw new Error('Failed to fetch data');
@@ -77,7 +77,6 @@ export default function AdminDashboard() {
     }
   };
 
-  // NEW: Delete Announcement Handler
   const handleDeleteAnnouncement = async (id) => {
     if (!window.confirm('Are you sure you want to delete this announcement? The file will be permanently removed.')) return;
     
@@ -114,7 +113,6 @@ export default function AdminDashboard() {
   const pendingReports = complaints.filter(c => c.status === 'Pending').length;
   const inProgressReports = complaints.filter(c => c.status === 'In Progress').length;
   
-  // Filter announcements down to ONLY the ones this specific admin posted
   const myAnnouncements = announcements.filter(a => a.admin?._id === user?._id);
 
   if (!user) return null;
@@ -146,9 +144,9 @@ export default function AdminDashboard() {
           <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
             <div>
               <span className="inline-block px-3 py-1 bg-white/10 rounded-full text-xs font-bold uppercase tracking-wider mb-3 backdrop-blur-md">Admin Assignment</span>
-              <h1 className="text-3xl font-black mb-1">Department Administration</h1>
+              <h1 className="text-3xl font-black mb-1">School of Engineering & Computing</h1>
               <p className="text-slate-300 font-medium">
-                {user.stream || 'General'} {user.branch || 'Administration'} • Semester {user.semester || 'All'}
+                {user.stream || 'B.Tech'} {user.branch || 'CSE'} • Semester {user.semester || '6'}
               </p>
             </div>
             <div className="flex gap-4 flex-wrap">
@@ -195,6 +193,7 @@ export default function AdminDashboard() {
               <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50">
                 <h3 className="font-bold text-lg">General Department Inbox</h3>
               </div>
+
               {isLoading ? (
                 <div className="p-10 text-center text-slate-500">Loading department issues...</div>
               ) : complaints.length === 0 ? (
@@ -215,25 +214,35 @@ export default function AdminDashboard() {
                         <tr key={complaint._id} className="hover:bg-slate-50 dark:hover:bg-slate-800/20 transition-colors">
                           <td className="px-6 py-4">
                             <div className="font-bold text-slate-900 dark:text-white">
-                              {complaint.student ? `${complaint.student.firstName} ${complaint.student.lastName}` : 'Unknown'}
+                              {complaint.student ? `${complaint.student.firstName} ${complaint.student.lastName}` : 'Unknown Student'}
                             </div>
-                            <div className="text-xs text-slate-500">Roll: {complaint.student?.identifier || 'N/A'}</div>
+                            <div className="text-xs text-slate-500">
+                              Roll: {complaint.student ? complaint.student.identifier : 'N/A'}
+                            </div>
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex gap-4 items-start">
                               {complaint.image && (
                                 <a href={`http://localhost:5000${complaint.image}`} target="_blank" rel="noreferrer" className="shrink-0">
-                                  <img src={`http://localhost:5000${complaint.image}`} alt="Evidence" className="w-14 h-14 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shadow-sm" />
+                                  <img src={`http://localhost:5000${complaint.image}`} alt="Issue Evidence" className="w-14 h-14 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shadow-sm hover:opacity-80 transition-opacity" />
                                 </a>
                               )}
                               <div className="max-w-xs">
                                 <div className="font-bold mb-1 truncate">{complaint.title}</div>
                                 <div className="text-[10px] text-slate-400">{formatDate(complaint.createdAt)}</div>
+                                
+                                {complaint.assignedAdmin && (
+                                  <div className="mt-1.5 text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded w-fit">
+                                    Directed to: {complaint.assignedAdmin.firstName} {complaint.assignedAdmin.lastName}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </td>
                           <td className="px-6 py-4">
-                            <span className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 rounded-md text-xs font-bold">{complaint.category}</span>
+                            <span className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 rounded-md text-xs font-bold text-slate-600 dark:text-slate-300">
+                              {complaint.category}
+                            </span>
                           </td>
                           <td className="px-6 py-4">
                             <select 
@@ -261,11 +270,18 @@ export default function AdminDashboard() {
             <div className="bg-indigo-50/30 dark:bg-indigo-900/10 rounded-2xl border border-indigo-100 dark:border-indigo-800 shadow-sm overflow-hidden">
               <div className="px-6 py-5 border-b border-indigo-100 dark:border-indigo-800 bg-white/50 dark:bg-slate-900/50">
                 <h3 className="font-bold text-lg text-indigo-900 dark:text-indigo-400">Directly Assigned To You</h3>
+                <p className="text-sm text-slate-500 mt-1">Students specifically requested your attention on these reports.</p>
               </div>
+
               {isLoading ? (
                 <div className="p-10 text-center text-slate-500">Loading your assignments...</div>
               ) : assignedComplaints.length === 0 ? (
-                <div className="p-16 text-center text-slate-500">You have no directly assigned reports right now.</div>
+                <div className="p-16 text-center">
+                  <div className="w-16 h-16 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-8 h-8 text-indigo-500 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
+                  </div>
+                  <p className="text-slate-600 dark:text-slate-400 font-medium">You have no directly assigned reports right now.</p>
+                </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm">
@@ -281,13 +297,28 @@ export default function AdminDashboard() {
                       {assignedComplaints.map((complaint) => (
                         <tr key={complaint._id} className="hover:bg-white dark:hover:bg-slate-800/20 transition-colors">
                           <td className="px-6 py-4">
-                            <div className="font-bold">{complaint.student ? `${complaint.student.firstName} ${complaint.student.lastName}` : 'Unknown'}</div>
+                            <div className="font-bold text-slate-900 dark:text-white">
+                              {complaint.student ? `${complaint.student.firstName} ${complaint.student.lastName}` : 'Unknown'}
+                            </div>
+                            <div className="text-xs text-slate-500">Roll: {complaint.student?.identifier}</div>
                           </td>
                           <td className="px-6 py-4">
-                            <div className="font-bold text-indigo-800 dark:text-indigo-400 truncate">{complaint.title}</div>
+                            <div className="flex gap-4 items-start">
+                              {complaint.image && (
+                                <a href={`http://localhost:5000${complaint.image}`} target="_blank" rel="noreferrer" className="shrink-0">
+                                  <img src={`http://localhost:5000${complaint.image}`} alt="Evidence" className="w-14 h-14 rounded-lg object-cover border border-indigo-200 dark:border-indigo-700 shadow-sm hover:opacity-80 transition-opacity" />
+                                </a>
+                              )}
+                              <div className="max-w-xs">
+                                <div className="font-bold mb-1 truncate text-indigo-800 dark:text-indigo-400">{complaint.title}</div>
+                                <div className="text-[10px] text-slate-400">{formatDate(complaint.createdAt)}</div>
+                              </div>
+                            </div>
                           </td>
                           <td className="px-6 py-4">
-                            <span className="px-2.5 py-1 bg-indigo-100 text-indigo-700 rounded-md text-xs font-bold">{complaint.category}</span>
+                            <span className="px-2.5 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-md text-xs font-bold">
+                              {complaint.category}
+                            </span>
                           </td>
                           <td className="px-6 py-4">
                             <select 
