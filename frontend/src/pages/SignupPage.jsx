@@ -180,21 +180,21 @@ export default function SignupPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Stream</label>
-                      <input type="text" name="stream" value={formData.stream} onChange={handleChange} placeholder="B.Tech" className="w-full p-3 rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:ring-1 focus:ring-indigo-500 transition-all font-medium text-sm text-white" />
+                      <input type="text" name="stream" value={formData.stream} onChange={handleChange} placeholder="B.Tech" className="w-full p-3 rounded-xl bg-white text-black dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:ring-1 focus:ring-indigo-500 transition-all font-medium text-sm dark:text-white" />
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Branch</label>
-                      <input type="text" name="branch" value={formData.branch} onChange={handleChange} placeholder="CSE" className="w-full p-3 rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:ring-1 focus:ring-indigo-500 transition-all font-medium text-sm text-white" />
+                      <input type="text" name="branch" value={formData.branch} onChange={handleChange} placeholder="CSE" className="w-full p-3 rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:ring-1 focus:ring-indigo-500 transition-all font-medium text-sm dark:text-white" />
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Semester</label>
-                      <input type="text" name="semester" value={formData.semester} onChange={handleChange} placeholder="6" className="w-full p-3 rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:ring-1 focus:ring-indigo-500 transition-all font-medium text-sm  text-white" />
+                      <input type="text" name="semester" value={formData.semester} onChange={handleChange} placeholder="6" className="w-full p-3 rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:ring-1 focus:ring-indigo-500 transition-all font-medium text-sm  dark:text-white" />
                     </div>
                   </div>
 
                   <div>
                     <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Contact Number</label>
-                    <input type="tel" name="contactNumber" value={formData.contactNumber} onChange={handleChange} placeholder="+91 98765 43210" className="w-full p-3 rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:ring-1 focus:ring-indigo-500 transition-all font-medium text-sm  text-white" />
+                    <input type="tel" name="contactNumber" value={formData.contactNumber} onChange={handleChange} placeholder="+91 98765 43210" className="w-full p-3 rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:ring-1 focus:ring-indigo-500 transition-all font-medium text-sm  dark:text-white" />
                   </div>
                 </div>
               )}

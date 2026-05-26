@@ -5,13 +5,18 @@ import ThemeToggle from '../../components/common/ThemeToggle';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('issues');
-
+  // 4 Tabs: 'issues', 'assigned', 'manage-students', 'announcements'
+  const [activeTab, setActiveTab] = useState('issues'); 
+  
   const [user, setUser] = useState(null);
   const [complaints, setComplaints] = useState([]);
   const [assignedComplaints, setAssignedComplaints] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
+  const [students, setStudents] = useState([]); // NEW: State for students
   const [isLoading, setIsLoading] = useState(true);
+
+  // Dynamic API Base URL for Production (Vercel/Render)
+  const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -36,17 +41,19 @@ export default function AdminDashboard() {
   const fetchAdminData = async (token) => {
     setIsLoading(true);
     try {
-      const [allRes, assignedRes, annRes] = await Promise.all([
-        fetch(`${import.meta.env.VITE_API_URL}/api/admin/complaints`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${import.meta.env.VITE_API_URL}/api/admin/complaints/assigned`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${import.meta.env.VITE_API_URL}/api/announcements`, { headers: { 'Authorization': `Bearer ${token}` } })
+      const [allRes, assignedRes, annRes, studentsRes] = await Promise.all([
+        fetch(`${API_BASE}/api/admin/complaints`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE}/api/admin/complaints/assigned`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE}/api/announcements`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE}/api/admin/students`, { headers: { 'Authorization': `Bearer ${token}` } }) // Fetch Students
       ]);
 
-      if (!allRes.ok || !assignedRes.ok || !annRes.ok) throw new Error('Failed to fetch data');
-
+      if (!allRes.ok || !assignedRes.ok || !annRes.ok || !studentsRes.ok) throw new Error('Failed to fetch data');
+      
       setComplaints(await allRes.json());
       setAssignedComplaints(await assignedRes.json());
       setAnnouncements(await annRes.json());
+      setStudents(await studentsRes.json());
     } catch (error) {
       toast.error('Could not load dashboard data.');
     } finally {
@@ -58,12 +65,12 @@ export default function AdminDashboard() {
     const token = localStorage.getItem('token');
     const originalComplaints = [...complaints];
     const originalAssigned = [...assignedComplaints];
-
+    
     setComplaints(complaints.map(c => c._id === complaintId ? { ...c, status: newStatus } : c));
     setAssignedComplaints(assignedComplaints.map(c => c._id === complaintId ? { ...c, status: newStatus } : c));
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/complaints/${complaintId}/status`, {
+      const response = await fetch(`${API_BASE}/api/admin/complaints/${complaintId}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ status: newStatus })
@@ -79,15 +86,15 @@ export default function AdminDashboard() {
 
   const handleDeleteAnnouncement = async (id) => {
     if (!window.confirm('Are you sure you want to delete this announcement? The file will be permanently removed.')) return;
-
+    
     const token = localStorage.getItem('token');
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/announcements/${id}`, {
+      const response = await fetch(`${API_BASE}/api/announcements/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to delete announcement');
-
+      
       toast.success('Announcement deleted successfully!');
       setAnnouncements(announcements.filter(a => a._id !== id));
     } catch (error) {
@@ -95,8 +102,29 @@ export default function AdminDashboard() {
     }
   };
 
+  // NEW: Delete Student Handler
+  const handleDeleteStudent = async (id) => {
+    if (!window.confirm('CRITICAL ACTION: Are you sure you want to permanently delete this student account?')) return;
+    
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`${API_BASE}/api/admin/students/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'Failed to delete student');
+      
+      toast.success('Student account permanently removed.');
+      setStudents(students.filter(s => s._id !== id));
+    } catch (error) {
+      toast.error(error.message);
+    }
+  };
+
   const getStatusColor = (status) => {
-    switch (status) {
+    switch(status) {
       case 'Resolved': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
       case 'In Progress': return 'bg-amber-100 text-amber-700 border-amber-200';
       case 'Pending': return 'bg-rose-100 text-rose-700 border-rose-200';
@@ -112,14 +140,14 @@ export default function AdminDashboard() {
   const resolvedReports = complaints.filter(c => c.status === 'Resolved').length;
   const pendingReports = complaints.filter(c => c.status === 'Pending').length;
   const inProgressReports = complaints.filter(c => c.status === 'In Progress').length;
-
+  
   const myAnnouncements = announcements.filter(a => a.admin?._id === user?._id);
 
   if (!user) return null;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white transition-colors duration-300">
-
+      
       <header className="sticky top-0 z-50 w-full border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto h-16 px-6 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
@@ -144,9 +172,9 @@ export default function AdminDashboard() {
           <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
             <div>
               <span className="inline-block px-3 py-1 bg-white/10 rounded-full text-xs font-bold uppercase tracking-wider mb-3 backdrop-blur-md">Admin Assignment</span>
-              <h1 className="text-3xl font-black mb-1">School of Engineering & Computing</h1>
+              <h1 className="text-3xl font-black mb-1">Department Administration</h1>
               <p className="text-slate-300 font-medium">
-                {user.stream || 'B.Tech'} {user.branch || 'CSE'} • Semester {user.semester || '6'}
+                {user.stream || 'General'} {user.branch || 'Operations'} • Semester {user.semester || 'All'}
               </p>
             </div>
             <div className="flex gap-4 flex-wrap">
@@ -161,6 +189,9 @@ export default function AdminDashboard() {
                   </span>
                 )}
               </button>
+              <button onClick={() => setActiveTab('manage-students')} className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-colors ${activeTab === 'manage-students' ? 'bg-white text-slate-900 shadow-md' : 'bg-white/10 hover:bg-white/20 text-white'}`}>
+                Student Directory
+              </button>
               <button onClick={() => setActiveTab('announcements')} className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-colors ${activeTab === 'announcements' ? 'bg-white text-slate-900 shadow-md' : 'bg-white/10 hover:bg-white/20 text-white'}`}>
                 Announcements
               </button>
@@ -168,6 +199,7 @@ export default function AdminDashboard() {
           </div>
         </div>
 
+        {/* TAB 1: ISSUES */}
         {activeTab === 'issues' && (
           <div className="space-y-8 animate-in fade-in duration-500">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -204,7 +236,7 @@ export default function AdminDashboard() {
                     <thead className="text-xs uppercase text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800">
                       <tr>
                         <th className="px-6 py-4 font-bold">Student Info</th>
-                        <th className="px-6 py-4 font-bold">Issue Details</th>
+                        <th className="px-6 py-4 font-bold">Issue Details & Evidence</th>
                         <th className="px-6 py-4 font-bold">Category</th>
                         <th className="px-6 py-4 font-bold">Status Action</th>
                       </tr>
@@ -223,14 +255,14 @@ export default function AdminDashboard() {
                           <td className="px-6 py-4">
                             <div className="flex gap-4 items-start">
                               {complaint.image && (
-                                <a href={`${import.meta.env.VITE_API_URL}${complaint.image}`} target="_blank" rel="noreferrer" className="shrink-0">
-                                  <img src={`${import.meta.env.VITE_API_URL}${complaint.image}`} alt="Issue Evidence" className="w-14 h-14 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shadow-sm hover:opacity-80 transition-opacity" />
+                                <a href={`${API_BASE}${complaint.image}`} target="_blank" rel="noreferrer" className="shrink-0">
+                                  <img src={`${API_BASE}${complaint.image}`} alt="Issue Evidence" className="w-14 h-14 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shadow-sm hover:opacity-80 transition-opacity" />
                                 </a>
                               )}
                               <div className="max-w-xs">
                                 <div className="font-bold mb-1 truncate">{complaint.title}</div>
                                 <div className="text-[10px] text-slate-400">{formatDate(complaint.createdAt)}</div>
-
+                                
                                 {complaint.assignedAdmin && (
                                   <div className="mt-1.5 text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded w-fit">
                                     Directed to: {complaint.assignedAdmin.firstName} {complaint.assignedAdmin.lastName}
@@ -245,7 +277,7 @@ export default function AdminDashboard() {
                             </span>
                           </td>
                           <td className="px-6 py-4">
-                            <select
+                            <select 
                               value={complaint.status}
                               onChange={(e) => handleStatusChange(complaint._id, e.target.value)}
                               className={`text-xs font-bold rounded-full px-3 py-1.5 border appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 ${getStatusColor(complaint.status)}`}
@@ -265,6 +297,7 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {/* TAB 2: SPECIAL ASSIGNED */}
         {activeTab === 'assigned' && (
           <div className="space-y-8 animate-in fade-in duration-500">
             <div className="bg-indigo-50/30 dark:bg-indigo-900/10 rounded-2xl border border-indigo-100 dark:border-indigo-800 shadow-sm overflow-hidden">
@@ -305,8 +338,8 @@ export default function AdminDashboard() {
                           <td className="px-6 py-4">
                             <div className="flex gap-4 items-start">
                               {complaint.image && (
-                                <a href={`${import.meta.env.VITE_API_URL}${complaint.image}`} target="_blank" rel="noreferrer" className="shrink-0">
-                                  <img src={`${import.meta.env.VITE_API_URL}${complaint.image}`} alt="Evidence" className="w-14 h-14 rounded-lg object-cover border border-indigo-200 dark:border-indigo-700 shadow-sm hover:opacity-80 transition-opacity" />
+                                <a href={`${API_BASE}${complaint.image}`} target="_blank" rel="noreferrer" className="shrink-0">
+                                  <img src={`${API_BASE}${complaint.image}`} alt="Evidence" className="w-14 h-14 rounded-lg object-cover border border-indigo-200 dark:border-indigo-700 shadow-sm" />
                                 </a>
                               )}
                               <div className="max-w-xs">
@@ -321,7 +354,7 @@ export default function AdminDashboard() {
                             </span>
                           </td>
                           <td className="px-6 py-4">
-                            <select
+                            <select 
                               value={complaint.status}
                               onChange={(e) => handleStatusChange(complaint._id, e.target.value)}
                               className={`text-xs font-bold rounded-full px-3 py-1.5 border appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500 ${getStatusColor(complaint.status)}`}
@@ -341,11 +374,68 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* TAB 3: ANNOUNCEMENTS MANAGEMENT */}
+        {/* TAB 3: MANAGE STUDENTS (NEW FEATURE) */}
+        {activeTab === 'manage-students' && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="mb-8">
+              <h2 className="text-3xl font-black tracking-tight mb-2">Student Directory</h2>
+              <p className="text-slate-500 dark:text-slate-400">View and manage all registered student accounts on the platform.</p>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+              {isLoading ? (
+                <div className="p-12 text-center text-slate-500">Loading student directory...</div>
+              ) : students.length === 0 ? (
+                <div className="p-16 text-center text-slate-500">No students are currently registered in the system.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="text-xs uppercase text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800">
+                      <tr>
+                        <th className="px-6 py-4 font-bold">Student Profile</th>
+                        <th className="px-6 py-4 font-bold">Academic Info</th>
+                        <th className="px-6 py-4 font-bold">Contact Details</th>
+                        <th className="px-6 py-4 font-bold text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                      {students.map((student) => (
+                        <tr key={student._id} className="hover:bg-slate-50 dark:hover:bg-slate-800/20 transition-colors">
+                          <td className="px-6 py-4">
+                            <div className="font-bold text-slate-900 dark:text-white">{student.firstName} {student.lastName}</div>
+                            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Roll No: {student.identifier}</div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="px-2.5 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-md text-xs font-bold">
+                              {student.stream} {student.branch}
+                            </span>
+                            <div className="text-xs text-slate-500 mt-1.5 font-medium">Semester {student.semester}</div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-xs font-medium text-slate-600 dark:text-slate-300">{student.email}</div>
+                            <div className="text-xs font-medium text-slate-500 mt-1">{student.contactNumber}</div>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <button 
+                              onClick={() => handleDeleteStudent(student._id)} 
+                              className="px-3 py-1.5 bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 rounded-lg text-xs font-bold transition-colors"
+                            >
+                              Remove Student
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: POST ANNOUNCEMENT */}
         {activeTab === 'announcements' && (
           <div className="animate-in fade-in duration-500 max-w-4xl mx-auto space-y-12">
-
-            {/* Post Announcement Form */}
             <div>
               <div className="mb-6 text-center">
                 <h2 className="text-3xl font-black tracking-tight mb-2">Broadcast Announcement</h2>
@@ -360,22 +450,22 @@ export default function AdminDashboard() {
                   const form = new FormData(e.target);
 
                   try {
-                    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/announcements`, {
+                    const res = await fetch(`${API_BASE}/api/announcements`, {
                       method: 'POST',
                       headers: { 'Authorization': `Bearer ${token}` },
                       body: form
                     });
                     if (!res.ok) throw new Error('Failed to post announcement');
-
+                    
                     const newAnnouncement = await res.json();
-                    setAnnouncements([newAnnouncement, ...announcements]); // Add to UI immediately
-
+                    setAnnouncements([newAnnouncement, ...announcements]);
+                    
                     toast.success('Announcement broadcasted successfully!');
                     e.target.reset();
                     document.getElementById('file-name-display').textContent = '';
                   } catch (err) { toast.error(err.message); } finally { setIsLoading(false); }
                 }} className="space-y-6">
-
+                  
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="md:col-span-2">
                       <label className="block text-sm font-bold mb-2">Notice Title</label>
@@ -398,9 +488,9 @@ export default function AdminDashboard() {
 
                   <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 border-dashed text-center">
                     <input type="file" name="attachment" id="attachment" className="hidden" onChange={(e) => {
-                      const name = e.target.files[0]?.name || '';
-                      document.getElementById('file-name-display').textContent = name ? `Attached: ${name}` : '';
-                    }} />
+                        const name = e.target.files[0]?.name || '';
+                        document.getElementById('file-name-display').textContent = name ? `Attached: ${name}` : '';
+                      }} />
                     <label htmlFor="attachment" className="cursor-pointer inline-flex items-center gap-2 px-6 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-full font-bold text-sm hover:shadow-md transition-all">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
                       Attach Document
@@ -415,7 +505,7 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* Announcement History / Management List */}
+            {/* History */}
             <div>
               <h3 className="text-2xl font-black mb-4">Your Broadcast History</h3>
               {myAnnouncements.length === 0 ? (
