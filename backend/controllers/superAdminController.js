@@ -2,11 +2,10 @@ import User from '../models/User.js';
 import Complaint from '../models/Complaint.js';
 
 // @desc    Get global system statistics
-// @route   GET /api/superadmin/stats
 export const getSystemStats = async (req, res) => {
   try {
     const totalStudents = await User.countDocuments({ role: 'student' });
-    const totalAdmins = await User.countDocuments({ role: 'admin' });
+    const totalAdmins = await User.countDocuments({ role: 'admin', isApproved: true });
     const totalComplaints = await Complaint.countDocuments();
     const resolvedComplaints = await Complaint.countDocuments({ status: 'Resolved' });
     const pendingComplaints = await Complaint.countDocuments({ status: 'Pending' });
@@ -21,52 +20,63 @@ export const getSystemStats = async (req, res) => {
 };
 
 // @desc    Get all pending admin approvals
-// @route   GET /api/superadmin/pending-admins
 export const getPendingAdmins = async (req, res) => {
   try {
-    // Find users who are admins and explicitly false/not approved yet
-    const pendingAdmins = await User.find({ 
-      role: 'admin', 
-      isApproved: false 
-    }).select('-password');
-    
-    console.log(`[API SEND] Sending ${pendingAdmins.length} pending admins to the frontend.`);
+    const pendingAdmins = await User.find({ role: 'admin', isApproved: { $ne: true } }).select('-password');
     res.json(pendingAdmins);
   } catch (error) {
-    console.error("[API ERROR] Failed to fetch pending admins:", error);
     res.status(500).json({ message: 'Failed to fetch pending admins' });
   }
 };
 
 // @desc    Approve an admin account
-// @route   PUT /api/superadmin/approve-admin/:id
 export const approveAdmin = async (req, res) => {
   try {
     const admin = await User.findById(req.params.id);
-    
-    if (!admin || admin.role !== 'admin') {
-      return res.status(404).json({ message: 'Admin account not found' });
-    }
+    if (!admin || admin.role !== 'admin') return res.status(404).json({ message: 'Admin not found' });
 
     admin.isApproved = true;
     await admin.save();
-
-    res.json({ message: 'Admin account approved successfully', admin });
+    res.json({ message: 'Admin approved', admin });
   } catch (error) {
     res.status(500).json({ message: 'Failed to approve admin' });
   }
 };
 
-// @desc    Reject/Delete an admin account
-// @route   DELETE /api/superadmin/reject-admin/:id
+// @desc    Reject a pending admin request
 export const rejectAdmin = async (req, res) => {
   try {
     const admin = await User.findByIdAndDelete(req.params.id);
-    if (!admin) {
-      return res.status(404).json({ message: 'Admin account not found' });
-    }
-    res.json({ message: 'Admin request rejected and account deleted.' });
+    if (!admin) return res.status(404).json({ message: 'Admin not found' });
+    res.json({ message: 'Admin request rejected.' });
   } catch (error) {
     res.status(500).json({ message: 'Failed to reject admin' });
+  }
+};
+
+// ==========================================
+// PERSONNEL MANAGEMENT FEATURES
+// ==========================================
+
+// @desc    Get all APPROVED admins
+export const getAllAdmins = async (req, res) => {
+  try {
+    const admins = await User.find({ role: 'admin', isApproved: true }).select('-password').sort({ createdAt: -1 });
+    res.json(admins);
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to fetch active administrators' });
+  }
+};
+
+// @desc    Delete/Revoke an approved admin
+export const deleteAdmin = async (req, res) => {
+  try {
+    const admin = await User.findByIdAndDelete(req.params.id);
+    if (!admin) return res.status(404).json({ message: 'Admin not found' });
+    
+    // Note: Complaints assigned to this admin will remain, but the assignedAdmin field will now reference a deleted user.
+    res.json({ message: 'Administrator access securely revoked.' });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to revoke admin access' });
   }
 };
