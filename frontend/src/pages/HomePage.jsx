@@ -43,7 +43,7 @@ export default function HomePage() {
                 Campus Connect
               </h1>
               <p className="text-sm text-slate-500 dark:text-slate-400">
-                Rayat Bahra University
+                Rayat Bahra Professional University
               </p>
             </div>
           </div>

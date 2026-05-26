@@ -10,7 +10,7 @@ export default function SuperAdminDashboard() {
   const [user, setUser] = useState(null);
   const [stats, setStats] = useState(null);
   const [pendingAdmins, setPendingAdmins] = useState([]);
-  const [activeAdmins, setActiveAdmins] = useState([]); // Stores approved admins
+  const [activeAdmins, setActiveAdmins] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -24,6 +24,7 @@ export default function SuperAdminDashboard() {
     }
 
     const parsedUser = JSON.parse(storedUser);
+
     if (parsedUser.role !== 'superadmin') {
       toast.error('Security Alert: Super Admin clearance required.');
       navigate('/');
@@ -36,20 +37,40 @@ export default function SuperAdminDashboard() {
 
   const fetchDashboardData = async (token) => {
     setIsLoading(true);
+
     try {
       const [statsRes, adminsRes, annRes, activeAdminsRes] = await Promise.all([
-        fetch('http://localhost:5000/api/superadmin/stats', { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch('http://localhost:5000/api/superadmin/pending-admins', { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch('http://localhost:5000/api/announcements', { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch('http://localhost:5000/api/superadmin/admins', { headers: { 'Authorization': `Bearer ${token}` } })
+        fetch(`${import.meta.env.VITE_API_URL}/api/superadmin/stats`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+
+        fetch(`${import.meta.env.VITE_API_URL}/api/superadmin/pending-admins`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+
+        fetch(`${import.meta.env.VITE_API_URL}/api/announcements`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+
+        fetch(`${import.meta.env.VITE_API_URL}/api/superadmin/admins`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
       ]);
 
-      if (!statsRes.ok || !adminsRes.ok || !annRes.ok || !activeAdminsRes.ok) throw new Error('Failed to fetch data');
-      
+      if (
+        !statsRes.ok ||
+        !adminsRes.ok ||
+        !annRes.ok ||
+        !activeAdminsRes.ok
+      ) {
+        throw new Error('Failed to fetch data');
+      }
+
       setStats(await statsRes.json());
       setPendingAdmins(await adminsRes.json());
       setAnnouncements(await annRes.json());
       setActiveAdmins(await activeAdminsRes.json());
+
     } catch (error) {
       toast.error('Could not load system data.');
     } finally {
@@ -59,9 +80,12 @@ export default function SuperAdminDashboard() {
 
   const handleAdminAction = async (id, action) => {
     const token = localStorage.getItem('token');
-    const endpoint = action === 'approve' 
-      ? `http://localhost:5000/api/superadmin/approve-admin/${id}`
-      : `http://localhost:5000/api/superadmin/reject-admin/${id}`;
+
+    const endpoint =
+      action === 'approve'
+        ? `${import.meta.env.VITE_API_URL}/api/superadmin/approve-admin/${id}`
+        : `${import.meta.env.VITE_API_URL}/api/superadmin/reject-admin/${id}`;
+
     const method = action === 'approve' ? 'PUT' : 'DELETE';
 
     try {
@@ -69,30 +93,50 @@ export default function SuperAdminDashboard() {
         method,
         headers: { 'Authorization': `Bearer ${token}` }
       });
+
       if (!response.ok) throw new Error(`Failed to ${action} admin`);
-      
+
       toast.success(`Admin successfully ${action}d!`);
-      setPendingAdmins(pendingAdmins.filter(admin => admin._id !== id));
-      fetchDashboardData(token); // Refresh lists
+
+      setPendingAdmins(
+        pendingAdmins.filter(admin => admin._id !== id)
+      );
+
+      fetchDashboardData(token);
+
     } catch (error) {
       toast.error(error.message);
     }
   };
 
   const handleRevokeAdmin = async (id) => {
-    if (!window.confirm('CRITICAL ACTION: Are you absolutely sure you want to permanently delete this Administrator account?')) return;
-    
+    if (
+      !window.confirm(
+        'CRITICAL ACTION: Are you absolutely sure you want to permanently delete this Administrator account?'
+      )
+    ) return;
+
     const token = localStorage.getItem('token');
+
     try {
-      const response = await fetch(`http://localhost:5000/api/superadmin/admins/${id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/api/superadmin/admins/${id}`,
+        {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        }
+      );
+
       if (!response.ok) throw new Error('Failed to revoke access');
-      
+
       toast.success('Administrator access permanently revoked.');
-      setActiveAdmins(activeAdmins.filter(a => a._id !== id));
-      fetchDashboardData(token); // Refresh stats
+
+      setActiveAdmins(
+        activeAdmins.filter(a => a._id !== id)
+      );
+
+      fetchDashboardData(token);
+
     } catch (error) {
       toast.error(error.message);
     }
@@ -100,27 +144,43 @@ export default function SuperAdminDashboard() {
 
   const handleDeleteAnnouncement = async (id) => {
     if (!window.confirm('Are you sure you want to delete this directive?')) return;
-    
+
     const token = localStorage.getItem('token');
+
     try {
-      const response = await fetch(`http://localhost:5000/api/announcements/${id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/api/announcements/${id}`,
+        {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        }
+      );
+
       if (!response.ok) throw new Error('Failed to delete directive');
-      
+
       toast.success('Directive deleted successfully!');
-      setAnnouncements(announcements.filter(a => a._id !== id));
+
+      setAnnouncements(
+        announcements.filter(a => a._id !== id)
+      );
+
     } catch (error) {
       toast.error(error.message);
     }
   };
 
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
-  const myAnnouncements = announcements.filter(a => a.admin?._id === user?._id);
+  const myAnnouncements = announcements.filter(
+    a => a.admin?._id === user?._id
+  );
 
   if (!user) return null;
 

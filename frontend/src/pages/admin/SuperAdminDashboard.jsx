@@ -37,9 +37,17 @@ export default function SuperAdminDashboard() {
     setIsLoading(true);
     try {
       const [statsRes, adminsRes, annRes] = await Promise.all([
-        fetch('http://localhost:5000/api/superadmin/stats', { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch('http://localhost:5000/api/superadmin/pending-admins', { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch('http://localhost:5000/api/announcements', { headers: { 'Authorization': `Bearer ${token}` } })
+        fetch(`${import.meta.env.VITE_API_URL}/api/superadmin/stats`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+
+        fetch(`${import.meta.env.VITE_API_URL}/api/superadmin/pending-admins`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+
+        fetch(`${import.meta.env.VITE_API_URL}/api/announcements`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
       ]);
 
       if (!statsRes.ok || !adminsRes.ok || !annRes.ok) throw new Error('Failed to fetch data');
@@ -57,8 +65,8 @@ export default function SuperAdminDashboard() {
   const handleAdminAction = async (id, action) => {
     const token = localStorage.getItem('token');
     const endpoint = action === 'approve'
-      ? `http://localhost:5000/api/superadmin/approve-admin/${id}`
-      : `http://localhost:5000/api/superadmin/reject-admin/${id}`;
+      ? `${import.meta.env.VITE_API_URL}/api/superadmin/approve-admin/${id}`
+      : `${import.meta.env.VITE_API_URL}/api/superadmin/reject-admin/${id}`;
     const method = action === 'approve' ? 'PUT' : 'DELETE';
 
     try {
@@ -81,7 +89,7 @@ export default function SuperAdminDashboard() {
 
     const token = localStorage.getItem('token');
     try {
-      const response = await fetch(`http://localhost:5000/api/announcements/${id}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/announcements/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -250,7 +258,7 @@ export default function SuperAdminDashboard() {
                     const form = new FormData(e.target);
 
                     try {
-                      const res = await fetch('http://localhost:5000/api/announcements', {
+                      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/announcements`, {
                         method: 'POST',
                         headers: { 'Authorization': `Bearer ${token}` },
                         body: form
