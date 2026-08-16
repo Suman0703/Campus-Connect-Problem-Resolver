@@ -8,26 +8,29 @@ export const SocketProvider = ({ children, user }) => {
   const [isConnected, setIsConnected] = useState(socket.connected);
 
   useEffect(() => {
-    if (user?._id) {
+    // SAFELY capture the ID regardless of how MongoDB/JWT formatted it
+    const currentUserId = user?._id || user?.id;
+
+    if (currentUserId) {
       socket.connect();
 
       socket.on('connect', () => {
         setIsConnected(true);
         // Register user ID and role for targeted room routing
-        socket.emit('setup_user', { userId: user._id, role: user.role });
+        socket.emit('setup_user', { userId: currentUserId, role: user.role });
       });
 
       socket.on('disconnect', () => {
         setIsConnected(false);
       });
 
-      // Admin alert: New complaint submitted
       socket.on('new_complaint_alert', (data) => {
         setNotifications((prev) => [data, ...prev]);
       });
 
       // Student alert: Complaint status updated
       socket.on('status_change_alert', (data) => {
+        console.log("⚡ Live Status Update Received:", data); // <-- Added log for debugging
         setNotifications((prev) => [data, ...prev]);
       });
 

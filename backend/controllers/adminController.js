@@ -31,28 +31,43 @@ export const getAssignedComplaints = async (req, res) => {
 // @desc    Update complaint status
 export const updateComplaintStatus = async (req, res) => {
   try {
-    const { status, resolutionNote } = req.body;
-    const complaintId = req.params.id;
+    const { id } = req.params;
+    const { status } = req.body;
 
-    const complaint = await Complaint.findById(complaintId);
-    if (!complaint) return res.status(404).json({ message: 'Complaint not found' });
+    // 1. Update the document in the database
+    const complaint = await Complaint.findByIdAndUpdate(
+      id,
+      { status },
+      { new: true }
+    );
 
-    complaint.status = status;
-    if (resolutionNote) complaint.resolutionNote = resolutionNote;
+    if (!complaint) {
+      return res.status(404).json({ message: 'Complaint not found' });
+    }
 
-    const updatedComplaint = await complaint.save();
-    res.json(updatedComplaint);
+    // 2. TRIGGER WEBSOCKET NOTIFICATION TO THE STUDENT
+    const io = req.app.get('io');
+    if (io) {
+      // Safely grab the student ID whether it was populated or not
+      const studentId = complaint.student._id || complaint.student;
+      
+      // Target the student's isolated socket room
+      io.to(`user:${studentId}`).emit('status_change_alert', {
+        complaintId: complaint._id,
+        title: complaint.title,
+        newStatus: complaint.status,
+        updatedAt: complaint.updatedAt,
+        message: `Your report "${complaint.title}" is now marked as "${complaint.status}".`
+      });
+    }
+
+    return res.status(200).json(complaint);
   } catch (error) {
-    res.status(500).json({ message: 'Failed to update status', error: error.message });
+    return res.status(500).json({ message: 'Failed to update complaint status', error: error.message });
   }
 };
 
-// ==========================================
-// NEW: STUDENT MANAGEMENT FUNCTIONALITY
-// ==========================================
 
-// @desc    Get all registered students
-// @route   GET /api/admin/students
 export const getAllStudents = async (req, res) => {
   try {
     // Only fetch users with the 'student' role

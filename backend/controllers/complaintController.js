@@ -68,8 +68,9 @@ export const getMyComplaints = async (req, res) => {
 export const updateComplaintStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = req.body; // 'Pending' | 'In Progress' | 'Resolved'
+    const { status } = req.body;
 
+    // 1. Update the document in the database
     const complaint = await Complaint.findByIdAndUpdate(
       id,
       { status },
@@ -80,10 +81,14 @@ export const updateComplaintStatus = async (req, res) => {
       return res.status(404).json({ message: 'Complaint not found' });
     }
 
-    // Trigger Real-Time WebSocket Notification to the Student
+    // 2. TRIGGER WEBSOCKET NOTIFICATION TO THE STUDENT
     const io = req.app.get('io');
     if (io) {
-      io.to(`user:${complaint.student}`).emit('status_change_alert', {
+      // Safely grab the student ID whether it was populated or not
+      const studentId = complaint.student._id || complaint.student;
+      
+      // Target the student's isolated socket room
+      io.to(`user:${studentId}`).emit('status_change_alert', {
         complaintId: complaint._id,
         title: complaint.title,
         newStatus: complaint.status,
@@ -92,8 +97,8 @@ export const updateComplaintStatus = async (req, res) => {
       });
     }
 
-    res.json(complaint);
+    return res.status(200).json(complaint);
   } catch (error) {
-    res.status(500).json({ message: 'Failed to update complaint status', error: error.message });
+    return res.status(500).json({ message: 'Failed to update complaint status', error: error.message });
   }
 };
