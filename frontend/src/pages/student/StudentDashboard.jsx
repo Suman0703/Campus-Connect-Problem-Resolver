@@ -28,6 +28,9 @@ export default function StudentDashboard() {
     if (!socket) return;
 
     const handleStatusChange = (data) => {
+      console.log("⚡ Live Status Update Received in Student Dashboard:", data);
+
+      // Instantly update the UI badge without refreshing
       setComplaints((prev) =>
         prev.map((item) =>
           item._id === data.complaintId
@@ -35,6 +38,9 @@ export default function StudentDashboard() {
             : item
         )
       );
+
+      // Show an instant toast notification to the student
+      toast.success(data.message, { icon: '🔔' });
     };
 
     socket.on('status_change_alert', handleStatusChange);
@@ -96,48 +102,48 @@ export default function StudentDashboard() {
     }
   };
 
- const handleSubmit = async (e) => {
-  e.preventDefault();
-  setIsSubmitting(true);
-  const token = localStorage.getItem('token');
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    const token = localStorage.getItem('token');
 
-  const formDataToSend = new FormData();
-  formDataToSend.append('title', formData.title);
-  formDataToSend.append('category', formData.category);
-  formDataToSend.append('location', formData.location);
-  formDataToSend.append('description', formData.description);
-  if (formData.assignedAdmin) formDataToSend.append('assignedAdmin', formData.assignedAdmin);
-  if (formData.image) formDataToSend.append('image', formData.image);
+    const formDataToSend = new FormData();
+    formDataToSend.append('title', formData.title);
+    formDataToSend.append('category', formData.category);
+    formDataToSend.append('location', formData.location);
+    formDataToSend.append('description', formData.description);
+    if (formData.assignedAdmin) formDataToSend.append('assignedAdmin', formData.assignedAdmin);
+    if (formData.image) formDataToSend.append('image', formData.image);
 
-  try {
-    const response = await fetch(`${API_BASE}/api/complaints`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` },
-      body: formDataToSend
-    });
+    try {
+      const response = await fetch(`${API_BASE}/api/complaints`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formDataToSend
+      });
 
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.message || 'Failed to submit complaint');
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'Failed to submit complaint');
 
-    toast.success('Complaint submitted successfully!');
-    
-    // Reset form state
-    setFormData({ title: '', category: 'Hostel', location: '', description: '', assignedAdmin: '', image: null });
-    setImagePreview(null);
-    if (document.getElementById('imageUpload')) document.getElementById('imageUpload').value = '';
+      toast.success('Complaint submitted successfully!');
 
-    // Instantly append new report to UI state & switch to overview tab
-    setComplaints(prev => [data, ...prev]);
-    setActiveTab('overview');
+      // Reset form state
+      setFormData({ title: '', category: 'Hostel', location: '', description: '', assignedAdmin: '', image: null });
+      setImagePreview(null);
+      if (document.getElementById('imageUpload')) document.getElementById('imageUpload').value = '';
 
-    // Refetch latest records from server
-    fetchDashboardData(token);
-  } catch (error) {
-    toast.error(error.message);
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+      // Instantly append new report to UI state & switch to overview tab
+      setComplaints(prev => [data, ...prev]);
+      setActiveTab('overview');
+
+      // Refetch latest records from server
+      fetchDashboardData(token);
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const getStatusColor = (status) => {
     switch (status) {

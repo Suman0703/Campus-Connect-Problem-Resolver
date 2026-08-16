@@ -29,12 +29,12 @@ export const getAssignedComplaints = async (req, res) => {
 };
 
 // @desc    Update complaint status
+// @desc    Update complaint status
 export const updateComplaintStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
 
-    // 1. Update the document in the database
     const complaint = await Complaint.findByIdAndUpdate(
       id,
       { status },
@@ -45,15 +45,16 @@ export const updateComplaintStatus = async (req, res) => {
       return res.status(404).json({ message: 'Complaint not found' });
     }
 
-    // 2. TRIGGER WEBSOCKET NOTIFICATION TO THE STUDENT
+    // TRIGGER WEBSOCKET NOTIFICATION TO THE STUDENT
     const io = req.app.get('io');
     if (io) {
-      // Safely grab the student ID whether it was populated or not
-      const studentId = complaint.student._id || complaint.student;
+      // 🚨 CRITICAL FIX: Force MongoDB ObjectId to standard String
+      const studentId = complaint.student._id ? complaint.student._id.toString() : complaint.student.toString();
       
-      // Target the student's isolated socket room
+      console.log(`Backend emitting to room: user:${studentId}`); // Debug log
+      
       io.to(`user:${studentId}`).emit('status_change_alert', {
-        complaintId: complaint._id,
+        complaintId: complaint._id.toString(),
         title: complaint.title,
         newStatus: complaint.status,
         updatedAt: complaint.updatedAt,
