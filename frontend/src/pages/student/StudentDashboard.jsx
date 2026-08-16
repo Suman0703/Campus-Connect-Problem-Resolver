@@ -2,13 +2,15 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import ThemeToggle from '../../components/common/ThemeToggle';
+import { useSocket } from '../../context/SocketContext';
+import NotificationBell from '../../components/NotificationBell';
 
 export default function StudentDashboard() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  
+
   const [user, setUser] = useState(null);
   const [complaints, setComplaints] = useState([]);
   const [management, setManagement] = useState([]);
@@ -19,22 +21,40 @@ export default function StudentDashboard() {
     title: '', category: 'Hostel', location: '', description: '', assignedAdmin: '', image: null
   });
 
-  // Dynamic API Base URL for Production (Vercel/Render)
   const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  const { socket } = useSocket();
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleStatusChange = (data) => {
+      setComplaints((prev) =>
+        prev.map((item) =>
+          item._id === data.complaintId
+            ? { ...item, status: data.newStatus }
+            : item
+        )
+      );
+    };
+
+    socket.on('status_change_alert', handleStatusChange);
+
+    return () => {
+      socket.off('status_change_alert', handleStatusChange);
+    };
+  }, [socket]);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
     const token = localStorage.getItem('token');
-
     if (!storedUser || !token) {
-      toast.error('Please log in to access the dashboard.');
-      navigate('/login');
+      toast.error('Not authenticated.');
+      navigate('/');
       return;
     }
 
     const parsedUser = JSON.parse(storedUser);
-    
-    // STRICT SECURITY CHECK: Only allow students
+
     if (parsedUser.role !== 'student') {
       toast.error('Access Denied: Student portal only.');
       navigate('/');
@@ -57,11 +77,11 @@ export default function StudentDashboard() {
       if (complaintsRes.ok) setComplaints(await complaintsRes.json());
       if (managementRes.ok) setManagement(await managementRes.json());
       if (announcementsRes.ok) setAnnouncements(await announcementsRes.json());
-      
-    } catch (error) { 
-      toast.error('Could not load dashboard data.'); 
-    } finally { 
-      setIsLoading(false); 
+
+    } catch (error) {
+      toast.error('Could not load dashboard data.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -72,52 +92,55 @@ export default function StudentDashboard() {
     if (file) {
       if (file.size > 10000000) return toast.error("Image must be smaller than 10MB");
       setFormData(prev => ({ ...prev, image: file }));
-      setImagePreview(URL.createObjectURL(file)); 
+      setImagePreview(URL.createObjectURL(file));
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    const token = localStorage.getItem('token');
+ const handleSubmit = async (e) => {
+  e.preventDefault();
+  setIsSubmitting(true);
+  const token = localStorage.getItem('token');
+
+  const formDataToSend = new FormData();
+  formDataToSend.append('title', formData.title);
+  formDataToSend.append('category', formData.category);
+  formDataToSend.append('location', formData.location);
+  formDataToSend.append('description', formData.description);
+  if (formData.assignedAdmin) formDataToSend.append('assignedAdmin', formData.assignedAdmin);
+  if (formData.image) formDataToSend.append('image', formData.image);
+
+  try {
+    const response = await fetch(`${API_BASE}/api/complaints`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formDataToSend
+    });
+
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to submit complaint');
+
+    toast.success('Complaint submitted successfully!');
     
-    const formDataToSend = new FormData();
-    formDataToSend.append('title', formData.title);
-    formDataToSend.append('category', formData.category);
-    formDataToSend.append('location', formData.location);
-    formDataToSend.append('description', formData.description);
-    if (formData.assignedAdmin) formDataToSend.append('assignedAdmin', formData.assignedAdmin);
-    if (formData.image) formDataToSend.append('image', formData.image);
+    // Reset form state
+    setFormData({ title: '', category: 'Hostel', location: '', description: '', assignedAdmin: '', image: null });
+    setImagePreview(null);
+    if (document.getElementById('imageUpload')) document.getElementById('imageUpload').value = '';
 
-    try {
-      const response = await fetch(`${API_BASE}/api/complaints`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: formDataToSend
-      });
+    // Instantly append new report to UI state & switch to overview tab
+    setComplaints(prev => [data, ...prev]);
+    setActiveTab('overview');
 
-      if (!response.ok) throw new Error('Failed to submit complaint');
-
-      toast.success('Complaint submitted successfully!');
-      setFormData({ title: '', category: 'Hostel', location: '', description: '', assignedAdmin: '', image: null });
-      setImagePreview(null);
-      if (document.getElementById('imageUpload')) document.getElementById('imageUpload').value = '';
-      
-      setActiveTab('overview');
-      
-      // Refresh complaints list
-      const updatedComplaints = await fetch(`${API_BASE}/api/complaints/my-complaints`, { headers: { 'Authorization': `Bearer ${token}` } });
-      if (updatedComplaints.ok) setComplaints(await updatedComplaints.json());
-
-    } catch (error) { 
-      toast.error(error.message); 
-    } finally { 
-      setIsSubmitting(false); 
-    }
-  };
+    // Refetch latest records from server
+    fetchDashboardData(token);
+  } catch (error) {
+    toast.error(error.message);
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   const getStatusColor = (status) => {
-    switch(status) {
+    switch (status) {
       case 'Resolved': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
       case 'In Progress': return 'bg-amber-100 text-amber-700 border-amber-200';
       case 'Pending': return 'bg-rose-100 text-rose-700 border-rose-200';
@@ -138,6 +161,7 @@ export default function StudentDashboard() {
             <span className="font-bold text-lg tracking-tight">Student Portal</span>
           </Link>
           <div className="flex items-center gap-4">
+            <NotificationBell />
             <ThemeToggle />
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center font-bold text-sm text-slate-600 dark:text-slate-300 uppercase">
@@ -187,7 +211,7 @@ export default function StudentDashboard() {
                 <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
                   <h3 className="font-bold text-lg">Your Recent Reports</h3>
                 </div>
-                
+
                 {isLoading ? (
                   <div className="p-8 text-center text-slate-500">Loading your reports...</div>
                 ) : complaints.length === 0 ? (
@@ -299,7 +323,7 @@ export default function StudentDashboard() {
                       ) : (
                         <div className="relative w-full animate-in zoom-in duration-300">
                           <img src={imagePreview} alt="Preview" className="w-full h-48 object-cover rounded-xl border-2 border-emerald-500 shadow-sm" />
-                          <button 
+                          <button
                             type="button"
                             onClick={() => {
                               setFormData(prev => ({ ...prev, image: null }));
@@ -363,7 +387,6 @@ export default function StudentDashboard() {
             </div>
           )}
 
-          {/* TAB 4: CAMPUS NOTICES / ANNOUNCEMENTS */}
           {activeTab === 'announcements' && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="mb-8">
@@ -378,7 +401,7 @@ export default function StudentDashboard() {
                   </div>
                 ) : announcements.map((notice) => (
                   <div key={notice._id} className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col md:flex-row">
-                    
+
                     <div className={`p-4 flex flex-col items-center justify-center shrink-0 w-full md:w-32 ${notice.priority === 'Emergency' ? 'bg-rose-500 text-white' : notice.priority === 'High' ? 'bg-amber-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>
                       {notice.priority === 'Emergency' && <svg className="w-8 h-8 mb-2 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>}
                       <span className="text-xs font-black uppercase tracking-wider">{notice.priority}</span>
@@ -390,7 +413,7 @@ export default function StudentDashboard() {
                         <h3 className="text-2xl font-black text-slate-900 dark:text-white leading-tight">{notice.title}</h3>
                       </div>
                       <p className="text-slate-600 dark:text-slate-300 mb-6 whitespace-pre-wrap leading-relaxed">{notice.content}</p>
-                      
+
                       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 pt-4 border-t border-slate-100 dark:border-slate-800">
                         <div className="flex items-center gap-2">
                           <div className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300">
@@ -398,7 +421,7 @@ export default function StudentDashboard() {
                           </div>
                           <span className="text-xs font-semibold text-slate-500">Posted by {notice.admin?.firstName} {notice.admin?.lastName}</span>
                         </div>
-                        
+
                         {notice.attachment && (
                           notice.fileType === 'image' ? (
                             <a href={`${API_BASE}${notice.attachment}`} target="_blank" rel="noreferrer" className="block max-w-sm mt-4 sm:mt-0">
@@ -418,7 +441,6 @@ export default function StudentDashboard() {
               </div>
             </div>
           )}
-
         </div>
       </main>
     </div>

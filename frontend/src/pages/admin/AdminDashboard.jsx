@@ -2,38 +2,55 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import ThemeToggle from '../../components/common/ThemeToggle';
+import { useSocket } from '../../context/SocketContext';
+import NotificationBell from '../../components/NotificationBell';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  // 4 Tabs: 'issues', 'assigned', 'manage-students', 'announcements'
   const [activeTab, setActiveTab] = useState('issues'); 
   
   const [user, setUser] = useState(null);
   const [complaints, setComplaints] = useState([]);
   const [assignedComplaints, setAssignedComplaints] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
-  const [students, setStudents] = useState([]); // NEW: State for students
+  const [students, setStudents] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { socket } = useSocket();
 
-  // Dynamic API Base URL for Production (Vercel/Render)
   const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    const token = localStorage.getItem('token');
+    if (!socket) return;
 
-    if (!storedUser || !token) {
+    const handleNewComplaint = (data) => {
+      setComplaints((prev) => [
+        {
+          _id: data.complaintId,
+          title: data.title,
+          category: data.category,
+          location: data.location,
+          status: 'Pending',
+          createdAt: data.createdAt,
+          student: { name: data.studentName }
+        },
+        ...prev
+      ]);
+    };
+
+    socket.on('new_complaint_alert', handleNewComplaint);
+
+    return () => {
+      socket.off('new_complaint_alert', handleNewComplaint);
+    };
+  }, [socket]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) {
       navigate('/login');
       return;
     }
-
-    const parsedUser = JSON.parse(storedUser);
-    if (parsedUser.role !== 'admin' && parsedUser.role !== 'superadmin') {
-      toast.error('Unauthorized access.');
-      navigate('/');
-      return;
-    }
-
+    const parsedUser = JSON.parse(localStorage.getItem('user'));
     setUser(parsedUser);
     fetchAdminData(token);
   }, [navigate]);
@@ -45,7 +62,7 @@ export default function AdminDashboard() {
         fetch(`${API_BASE}/api/admin/complaints`, { headers: { 'Authorization': `Bearer ${token}` } }),
         fetch(`${API_BASE}/api/admin/complaints/assigned`, { headers: { 'Authorization': `Bearer ${token}` } }),
         fetch(`${API_BASE}/api/announcements`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API_BASE}/api/admin/students`, { headers: { 'Authorization': `Bearer ${token}` } }) // Fetch Students
+        fetch(`${API_BASE}/api/admin/students`, { headers: { 'Authorization': `Bearer ${token}` } })
       ]);
 
       if (!allRes.ok || !assignedRes.ok || !annRes.ok || !studentsRes.ok) throw new Error('Failed to fetch data');
@@ -102,7 +119,6 @@ export default function AdminDashboard() {
     }
   };
 
-  // NEW: Delete Student Handler
   const handleDeleteStudent = async (id) => {
     if (!window.confirm('CRITICAL ACTION: Are you sure you want to permanently delete this student account?')) return;
     
@@ -155,6 +171,7 @@ export default function AdminDashboard() {
             <span className="font-bold text-lg tracking-tight">Admin Portal</span>
           </Link>
           <div className="flex items-center gap-4">
+            <NotificationBell />
             <ThemeToggle />
             <div className="flex items-center gap-2 pl-4 border-l border-slate-200 dark:border-slate-800">
               <span className="text-sm font-bold hidden sm:block">{user.firstName} {user.lastName}</span>
@@ -199,7 +216,6 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* TAB 1: ISSUES */}
         {activeTab === 'issues' && (
           <div className="space-y-8 animate-in fade-in duration-500">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -297,7 +313,6 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* TAB 2: SPECIAL ASSIGNED */}
         {activeTab === 'assigned' && (
           <div className="space-y-8 animate-in fade-in duration-500">
             <div className="bg-indigo-50/30 dark:bg-indigo-900/10 rounded-2xl border border-indigo-100 dark:border-indigo-800 shadow-sm overflow-hidden">
@@ -374,7 +389,6 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* TAB 3: MANAGE STUDENTS (NEW FEATURE) */}
         {activeTab === 'manage-students' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="mb-8">
@@ -433,7 +447,6 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* TAB 4: POST ANNOUNCEMENT */}
         {activeTab === 'announcements' && (
           <div className="animate-in fade-in duration-500 max-w-4xl mx-auto space-y-12">
             <div>
@@ -505,7 +518,6 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* History */}
             <div>
               <h3 className="text-2xl font-black mb-4">Your Broadcast History</h3>
               {myAnnouncements.length === 0 ? (
@@ -545,10 +557,8 @@ export default function AdminDashboard() {
                 </div>
               )}
             </div>
-
           </div>
         )}
-
       </main>
     </div>
   );

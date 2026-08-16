@@ -18,15 +18,15 @@ export const protect = async (req, res, next) => {
         return res.status(401).json({ message: 'User not found. Token is invalid.' });
       }
 
-      next();
+      return next();
     } catch (error) {
       console.error('Auth Error:', error.message);
-      res.status(401).json({ message: 'Not authorized, token failed or expired.' });
+      return res.status(401).json({ message: 'Not authorized, token failed or expired.' });
     }
   }
 
   if (!token) {
-    res.status(401).json({ message: 'Not authorized, no token provided.' });
+    return res.status(401).json({ message: 'Not authorized, no token provided.' });
   }
 };
 
@@ -34,21 +34,22 @@ export const protect = async (req, res, next) => {
 // 2. Admin Route Middleware (Strict Access)
 // ==========================================
 export const isAdmin = (req, res, next) => {
-  // STRICT FIX: Must be an Admin AND be approved, OR be the Super Admin
+  // Must be an Admin AND approved, OR Super Admin
   if (req.user && ((req.user.role === 'admin' && req.user.isApproved === true) || req.user.role === 'superadmin')) {
-    next(); 
-  } else {
-    res.status(403).json({ message: 'Access Denied. Approved Admin privileges required.' });
+    return next(); 
   }
+  return res.status(403).json({ message: 'Access Denied. Approved Admin privileges required.' });
 };
+
+// Alias export for backward compatibility with routes using `adminOnly`
+export const adminOnly = isAdmin;
 
 // ==========================================
 // 3. Super Admin Route Middleware (Absolute Strict)
 // ==========================================
 export const isSuperAdmin = (req, res, next) => {
   if (req.user && req.user.role === 'superadmin') {
-    next();
-  } else {
-    res.status(403).json({ message: 'Access Denied. Only the Super Admin can perform this action.' });
+    return next();
   }
+  return res.status(403).json({ message: 'Access Denied. Only the Super Admin can perform this action.' });
 };

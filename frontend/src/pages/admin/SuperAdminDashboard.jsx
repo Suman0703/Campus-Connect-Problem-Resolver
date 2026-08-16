@@ -2,18 +2,22 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import ThemeToggle from '../../components/common/ThemeToggle';
+import { useSocket } from '../../context/SocketContext';
+import NotificationBell from '../../components/NotificationBell';
 
 export default function SuperAdminDashboard() {
   const navigate = useNavigate();
-  // We now have 4 distinct tabs
   const [activeTab, setActiveTab] = useState('overview'); 
   
   const [user, setUser] = useState(null);
   const [stats, setStats] = useState(null);
   const [pendingAdmins, setPendingAdmins] = useState([]);
-  const [activeAdmins, setActiveAdmins] = useState([]); // State for the Personnel List
+  const [activeAdmins, setActiveAdmins] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const { socket } = useSocket();
+  const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -35,14 +39,39 @@ export default function SuperAdminDashboard() {
     fetchDashboardData(token);
   }, [navigate]);
 
+  // Real-Time Socket Listeners for Live Metric Updates
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNewComplaint = () => {
+      setStats((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          complaints: {
+            ...prev.complaints,
+            total: prev.complaints.total + 1,
+            pending: prev.complaints.pending + 1
+          }
+        };
+      });
+    };
+
+    socket.on('new_complaint_alert', handleNewComplaint);
+
+    return () => {
+      socket.off('new_complaint_alert', handleNewComplaint);
+    };
+  }, [socket]);
+
   const fetchDashboardData = async (token) => {
     setIsLoading(true);
     try {
       const [statsRes, adminsRes, annRes, activeAdminsRes] = await Promise.all([
-        fetch(`${import.meta.env.VITE_API_URL}/api/superadmin/stats`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${import.meta.env.VITE_API_URL}/api/superadmin/pending-admins`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${import.meta.env.VITE_API_URL}/api/announcements`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${import.meta.env.VITE_API_URL}/api/superadmin/admins`, { headers: { 'Authorization': `Bearer ${token}` } }) // Fetches all approved admins
+        fetch(`${API_BASE}/api/superadmin/stats`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE}/api/superadmin/pending-admins`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE}/api/announcements`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE}/api/superadmin/admins`, { headers: { 'Authorization': `Bearer ${token}` } })
       ]);
 
       if (!statsRes.ok || !adminsRes.ok || !annRes.ok || !activeAdminsRes.ok) throw new Error('Failed to fetch data');
@@ -61,8 +90,8 @@ export default function SuperAdminDashboard() {
   const handleAdminAction = async (id, action) => {
     const token = localStorage.getItem('token');
     const endpoint = action === 'approve' 
-      ? `${import.meta.env.VITE_API_URL}/api/superadmin/approve-admin/${id}`
-      : `${import.meta.env.VITE_API_URL}/api/superadmin/reject-admin/${id}`;
+      ? `${API_BASE}/api/superadmin/approve-admin/${id}`
+      : `${API_BASE}/api/superadmin/reject-admin/${id}`;
     const method = action === 'approve' ? 'PUT' : 'DELETE';
 
     try {
@@ -73,7 +102,7 @@ export default function SuperAdminDashboard() {
       if (!response.ok) throw new Error(`Failed to ${action} admin`);
       
       toast.success(`Admin successfully ${action}d!`);
-      fetchDashboardData(token); // Refresh lists automatically
+      fetchDashboardData(token);
     } catch (error) {
       toast.error(error.message);
     }
@@ -84,14 +113,14 @@ export default function SuperAdminDashboard() {
     
     const token = localStorage.getItem('token');
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/superadmin/admins/${id}`, {
+      const response = await fetch(`${API_BASE}/api/superadmin/admins/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to revoke access');
       
       toast.success('Administrator access permanently revoked.');
-      fetchDashboardData(token); // Refresh lists automatically
+      fetchDashboardData(token);
     } catch (error) {
       toast.error(error.message);
     }
@@ -102,7 +131,7 @@ export default function SuperAdminDashboard() {
     
     const token = localStorage.getItem('token');
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/announcements/${id}`, {
+      const response = await fetch(`${API_BASE}/api/announcements/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -119,7 +148,12 @@ export default function SuperAdminDashboard() {
     return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
-  const myAnnouncements = announcements.filter(a => a.admin?._id === user?._id);
+  // FIXED FILTERING LOGIC: Ensures announcements match regardless of object or string ID
+  const currentUserId = user?._id || user?.id;
+  const myAnnouncements = announcements.filter(a => {
+    const adminId = a.admin?._id || a.admin?.id || a.admin;
+    return String(adminId) === String(currentUserId);
+  });
 
   if (!user) return null;
 
@@ -133,6 +167,7 @@ export default function SuperAdminDashboard() {
             <span className="font-bold text-lg tracking-tight text-indigo-900 dark:text-indigo-400">System Overseer</span>
           </Link>
           <div className="flex items-center gap-4">
+            <NotificationBell />
             <ThemeToggle />
             <div className="flex items-center gap-2 pl-4 border-l border-slate-200 dark:border-slate-800">
               <span className="text-sm font-bold hidden sm:block">Super Admin</span>
@@ -160,7 +195,6 @@ export default function SuperAdminDashboard() {
                 {pendingAdmins.length > 0 && <span className="bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">{pendingAdmins.length}</span>}
               </button>
 
-              {/* THIS IS THE MANAGE PERSONNEL TAB */}
               <button onClick={() => setActiveTab('manage-admins')} className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl font-semibold text-sm transition-all ${activeTab === 'manage-admins' ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400' : 'text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50'}`}>
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                 Manage Personnel
@@ -251,7 +285,6 @@ export default function SuperAdminDashboard() {
             </div>
           )}
 
-          {/* TAB 3: MANAGE PERSONNEL LIST */}
           {activeTab === 'manage-admins' && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="mb-8">
@@ -312,7 +345,6 @@ export default function SuperAdminDashboard() {
 
           {activeTab === 'announcements' && (
             <div className="animate-in fade-in duration-500 max-w-4xl space-y-12">
-              
               <div>
                 <div className="mb-6">
                   <h2 className="text-3xl font-black tracking-tight mb-2">Broadcast Directive</h2>
@@ -326,20 +358,28 @@ export default function SuperAdminDashboard() {
                     const form = new FormData(e.target);
 
                     try {
-                      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/announcements`, {
+                      const res = await fetch(`${API_BASE}/api/announcements`, {
                         method: 'POST',
                         headers: { 'Authorization': `Bearer ${token}` },
                         body: form
                       });
-                      if (!res.ok) throw new Error('Failed to post directive');
                       
                       const newDirective = await res.json();
-                      setAnnouncements([newDirective, ...announcements]);
+                      if (!res.ok) throw new Error(newDirective.message || 'Failed to post directive');
+                      
+                      setAnnouncements(prev => [newDirective, ...prev]);
                       
                       toast.success('Directive broadcasted successfully!');
                       e.target.reset();
-                      document.getElementById('file-name-display').textContent = '';
-                    } catch (err) { toast.error(err.message); } finally { setIsLoading(false); }
+                      const fileLabel = document.getElementById('file-name-display');
+                      if (fileLabel) fileLabel.textContent = '';
+                      
+                      fetchDashboardData(token);
+                    } catch (err) { 
+                      toast.error(err.message); 
+                    } finally { 
+                      setIsLoading(false); 
+                    }
                   }} className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       <div className="md:col-span-2">
@@ -416,10 +456,8 @@ export default function SuperAdminDashboard() {
                   </div>
                 )}
               </div>
-
             </div>
           )}
-
         </div>
       </main>
     </div>

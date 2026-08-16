@@ -1,17 +1,20 @@
 import express from 'express';
-import { createComplaint, getMyComplaints } from '../controllers/complaintController.js';
-import { protect } from '../middleware/authMiddleware.js';
-import upload from '../middleware/uploadMiddleware.js'; // <-- Import Multer
+import { 
+  createComplaint, 
+  getMyComplaints, 
+  updateComplaintStatus 
+} from '../controllers/complaintController.js';
+import { protect, isAdmin } from '../middleware/authMiddleware.js';
+import upload from '../middleware/uploadMiddleware.js';
 
 const router = express.Router();
 
-// CHAIN OF COMMAND: 
-// 1. Verify User (protect) 
-// 2. Process Image (upload.single) 
-// 3. Save to Database (createComplaint)
+// Student routes (supports both /my and /my-complaints)
 router.post('/', protect, upload.single('image'), createComplaint);
-
-// Get a student's personal complaints
+router.get('/my', protect, getMyComplaints);
 router.get('/my-complaints', protect, getMyComplaints);
+
+// Admin status update route
+router.put('/:id/status', protect, isAdmin, updateComplaintStatus);
 
 export default router;

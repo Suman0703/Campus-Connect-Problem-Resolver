@@ -1,101 +1,112 @@
-import Announcement from '../models/Announcement.js';
-import path from 'path';
 import fs from 'fs';
+import path from 'path';
 import { fileURLToPath } from 'url';
+import Announcement from '../models/Announcement.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// @desc    Create a new announcement
+// @desc    Create a new announcement / directive
+// @route   POST /api/announcements
+// @access  Private (Admin / Super Admin)
 export const createAnnouncement = async (req, res) => {
   try {
-    const { title, content, priority } = req.body;
+    const { title, content, priority, targetAudience } = req.body;
+
+    if (!title || !content) {
+      return res.status(400).json({ message: 'Title and content are required.' });
+    }
+
     let attachmentPath = null;
-    let fileCategory = null;
-    let originalName = null;
+    let fileType = null;
+    let originalFileName = null;
 
     if (req.file) {
       attachmentPath = `/uploads/${req.file.filename}`;
-      originalName = req.file.originalname;
-      
-      const ext = path.extname(req.file.originalname).toLowerCase();
-      if (ext === '.pdf') fileCategory = 'pdf';
-      else if (['.jpg', '.jpeg', '.png'].includes(ext)) fileCategory = 'image';
-      else if (['.doc', '.docx'].includes(ext)) fileCategory = 'word';
-      else if (['.ppt', '.pptx'].includes(ext)) fileCategory = 'presentation';
-      else fileCategory = 'document';
+      originalFileName = req.file.originalname;
+      fileType = req.file.mimetype.startsWith('image/') ? 'image' : 'document';
     }
 
-    const targetAudience = req.user.role === 'superadmin' ? 'admin' : 'student';
+    const adminId = req.user?._id || req.user?.id;
 
-    // Creates a brand new document every time
     const announcement = new Announcement({
-      admin: req.user._id,
       title,
       content,
-      priority,
+      priority: priority || 'Normal',
+      targetAudience: targetAudience || 'all',
+      admin: adminId,
       attachment: attachmentPath,
-      fileType: fileCategory,
-      originalFileName: originalName,
-      targetAudience
+      fileType,
+      originalFileName
     });
 
-    const createdAnnouncement = await announcement.save();
-    
-    // Populate admin details before sending back so UI updates immediately
-    const populatedAnnouncement = await Announcement.findById(createdAnnouncement._id)
-      .populate('admin', 'firstName lastName stream branch role');
-      
-    res.status(201).json(populatedAnnouncement);
-  } catch (error) {
-    res.status(500).json({ message: 'Failed to create announcement', error: error.message });
-  }
-};
+    const savedAnnouncement = await announcement.save();
 
-// @desc    Get announcements based on user role
-export const getAnnouncements = async (req, res) => {
-  try {
-    let filter = {};
-    
-    if (req.user.role === 'student') {
-      filter.targetAudience = 'student';
-    } else if (req.user.role === 'admin') {
-      // Admins see Super Admin posts OR their own posts
-      filter.$or = [{ targetAudience: 'admin' }, { admin: req.user._id }];
+    // Reliably retrieve fully populated document across all Mongoose versions
+    const populatedAnnouncement = await Announcement.findById(savedAnnouncement._id)
+      .populate('admin', '_id id firstName lastName role email department');
+
+    // Trigger Real-Time WebSocket Notification
+    const io = req.app.get('io');
+    if (io) {
+      const adminName = `${req.user?.firstName || ''} ${req.user?.lastName || ''}`.trim() || 'Administration';
+      
+      io.emit('new_announcement_alert', {
+        ...populatedAnnouncement.toObject(),
+        adminName,
+        message: `New Notice: "${populatedAnnouncement.title}" posted by ${adminName}`
+      });
     }
 
-    const announcements = await Announcement.find(filter)
-      .populate('admin', 'firstName lastName stream branch role')
-      .sort({ createdAt: -1 }); // Newest first
-      
-    res.json(announcements);
+    return res.status(201).json(populatedAnnouncement);
   } catch (error) {
-    res.status(500).json({ message: 'Failed to fetch announcements', error: error.message });
+    console.error('Error creating announcement:', error);
+    return res.status(500).json({ message: 'Failed to create announcement', error: error.message });
   }
 };
 
-// @desc    Delete an announcement
+// @desc    Get all announcements
+// @route   GET /api/announcements
+// @access  Public / Private
+export const getAnnouncements = async (req, res) => {
+  try {
+    const announcements = await Announcement.find({})
+      .populate('admin', '_id id firstName lastName role email department')
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json(announcements);
+  } catch (error) {
+    console.error('Error fetching announcements:', error);
+    return res.status(500).json({ message: 'Failed to fetch announcements', error: error.message });
+  }
+};
+
+// @desc    Delete announcement & clean up attached file from disk
+// @route   DELETE /api/announcements/:id
+// @access  Private (Admin / Super Admin)
 export const deleteAnnouncement = async (req, res) => {
   try {
     const announcement = await Announcement.findById(req.params.id);
-    if (!announcement) return res.status(404).json({ message: 'Announcement not found' });
-
-    // Security check
-    if (req.user.role !== 'superadmin' && announcement.admin.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: 'Not authorized to delete this announcement' });
+    if (!announcement) {
+      return res.status(404).json({ message: 'Announcement not found' });
     }
 
-    // Free up server storage
+    // Delete attached physical file from /uploads if it exists
     if (announcement.attachment) {
-      const filePath = path.join(__dirname, '..', '..', announcement.attachment);
+      const filePath = path.join(__dirname, '..', announcement.attachment);
       if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
+        try {
+          fs.unlinkSync(filePath);
+        } catch (fsErr) {
+          console.warn('Could not delete attachment file from disk:', fsErr.message);
+        }
       }
     }
 
     await announcement.deleteOne();
-    res.json({ message: 'Announcement deleted successfully' });
+    return res.status(200).json({ message: 'Announcement deleted successfully', id: req.params.id });
   } catch (error) {
-    res.status(500).json({ message: 'Failed to delete announcement', error: error.message });
+    console.error('Error deleting announcement:', error);
+    return res.status(500).json({ message: 'Failed to delete announcement', error: error.message });
   }
 };
